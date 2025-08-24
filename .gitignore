@@ -65,3 +65,4 @@ Thumbs.db
 .cache/
 .parcel-cache/
 "@ | Out-File -FilePath ".gitignore" -Encoding utf8
+.vercel
