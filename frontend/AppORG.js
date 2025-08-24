@@ -8,9 +8,6 @@ const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 function App() {
-  // 🔍 DEBUGGING - CONSOLE LOGS
-  console.log('🔍 App component rendering');
-  
   const [user, setUser] = useState(null);
   const [globalStats, setGlobalStats] = useState(null);
   const [userBots, setUserBots] = useState([]);
@@ -18,13 +15,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false); // NUEVO ESTADO
   const [authError, setAuthError] = useState(null);
   const [deleting, setDeleting] = useState(null);
-
-  // 🔍 DEBUGGING - USER STATE
-  console.log('🔍 User state:', user);
-  console.log('🔍 Show Dashboard state:', showDashboard);
 
   // Función para cargar todos los datos
   const loadAllData = async () => {
@@ -169,7 +162,7 @@ function App() {
             setUserBots([]);
             setGlobalStats(null);
             setShowGenerator(false);
-            setShowDashboard(false);
+            setShowDashboard(false); // RESETEAR DASHBOARD
             break;
           case 'TOKEN_REFRESHED':
             console.log('Token refrescado');
@@ -312,7 +305,6 @@ function App() {
 
   // RENDERIZAR DASHBOARD SI ESTÁ ACTIVO
   if (showDashboard) {
-    console.log('🔍 Rendering Dashboard view');
     return (
       <div>
         <div style={{ 
@@ -468,9 +460,6 @@ function App() {
     );
   }
 
-  // 🔍 DEBUGGING - MAIN RENDER
-  console.log('🔍 Rendering main dashboard view');
-
   // DASHBOARD PRINCIPAL
   return (
     <div style={{
@@ -531,28 +520,9 @@ function App() {
               )}
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              
-              {/* 🔍 DEBUGGING - BOTONES DE PRUEBA */}
-              <button 
-                style={{ 
-                  padding: '12px', 
-                  background: 'red', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}
-              >
-                🧪 BOTÓN PRUEBA ROJO
-              </button>
-              
-              {/* 🔍 DEBUGGING - DASHBOARD ANALYTICS FORZADO */}
+              {/* BOTÓN DASHBOARD ANALYTICS - NUEVO */}
               <button
-                onClick={() => {
-                  console.log('🔍 Dashboard button clicked!');
-                  setShowDashboard(true);
-                }}
+                onClick={() => setShowDashboard(true)}
                 style={{
                   padding: '12px 24px',
                   background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
@@ -565,7 +535,7 @@ function App() {
                   boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }}
               >
-                📊 Dashboard Analytics (FORZADO)
+                📊 Dashboard Analytics
               </button>
               
               <button
@@ -660,7 +630,7 @@ function App() {
         )}
       </div>
 
-      {/* Resto del código igual... */}
+      {/* Dashboard Personal CON FUNCIONALIDAD DE ELIMINACIÓN */}
       {user && (
         <div style={{
           background: 'white',
@@ -814,6 +784,173 @@ function App() {
         </div>
       )}
 
+      {/* Dashboard Global */}
+      <div style={{
+        background: 'white',
+        padding: '25px',
+        borderRadius: '15px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        marginBottom: '30px'
+      }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+          📊 Estadísticas Globales de la Comunidad
+        </h2>
+        
+        {globalPatterns && globalPatterns.length > 0 ? (
+          <div>
+            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>🔍 Patrones Exitosos Identificados</h3>
+            <div style={{ display: 'grid', gap: '15px' }}>
+              {globalPatterns.map((pattern, index) => (
+                <div key={index} style={{
+                  padding: '15px',
+                  background: '#f8f9fa',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #28a745'
+                }}>
+                  <h4 style={{ margin: '0 0 10px 0' }}>
+                    {pattern.activo} - {pattern.temporalidad} - {pattern.direccion}
+                  </h4>
+                  <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                    <strong>Tipo Entrada:</strong> {pattern.tipo_entrada} | 
+                    <strong> OSS:</strong> {pattern.oss_config}
+                  </p>
+                  <p style={{ margin: '5px 0', fontSize: '14px', color: '#28a745' }}>
+                    <strong>Índice de Éxito:</strong> {pattern.indice_exito}% 
+                    <span style={{ color: '#666' }}>
+                      ({pattern.total_bots_evaluados} evaluaciones)
+                    </span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px',
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            borderRadius: '15px'
+          }}>
+            <h3 style={{ color: '#333', marginBottom: '15px' }}>
+              🎯 Tu "Wikipedia del Trading Algorítmico" Está Lista
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
+              Los patrones exitosos de la comunidad aparecerán aquí cuando los usuarios evalúen sus estrategias.
+              ¡Sé el primero en contribuir!
+            </p>
+            {user && (
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.1)',
+                padding: '20px',
+                borderRadius: '10px',
+                marginTop: '20px'
+              }}>
+                <p style={{ margin: '0 0 10px 0', color: '#667eea', fontWeight: 'bold' }}>
+                  🎛️ Genera Múltiples Configuraciones
+                </p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Usa el Generador Masivo para crear configuraciones con checkboxes exclusivos, 
+                  técnicas avanzadas combinadas y parámetros OSS. Contribuye a la inteligencia colectiva.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Funcionalidades del Sistema */}
+      <div style={{
+        background: 'white',
+        padding: '25px',
+        borderRadius: '15px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+          🚀 Tu Plataforma de Inteligencia Colectiva
+        </h2>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+          {/* DASHBOARD ANALYTICS - NUEVO CARD */}
+          <div style={{ 
+            padding: '15px', 
+            background: user ? '#e8f5e8' : '#f8f9fa', 
+            borderRadius: '8px',
+            border: user ? '2px solid #28a745' : '1px solid #dee2e6'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', color: user ? '#28a745' : '#6c757d' }}>
+              📊 Dashboard Analytics {user ? '✅' : '🔒'}
+            </h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Métricas de performance, gráficos interactivos, análisis por técnicas y activos
+            </p>
+            {user && (
+              <button
+                onClick={() => setShowDashboard(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 16px',
+                  background: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Ver Analytics
+              </button>
+            )}
+          </div>
+
+          <div style={{ 
+            padding: '15px', 
+            background: user ? '#e3f2fd' : '#f8f9fa', 
+            borderRadius: '8px',
+            border: user ? '2px solid #1976d2' : '1px solid #dee2e6'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', color: user ? '#1976d2' : '#6c757d' }}>
+              🎛️ Generador Masivo {user ? '✅' : '🔒'}
+            </h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Checkboxes exclusivos, técnicas SPP/WFM/MC Trade/Secuencial/High Back Test Precision, configuración OSS
+            </p>
+            {user && (
+              <button
+                onClick={() => setShowGenerator(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 16px',
+                  background: '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Abrir Generador
+              </button>
+            )}
+          </div>
+          
+          <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>📊 Dashboard Global</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Comparación personal vs global, benchmarking automático
+            </p>
+          </div>
+          
+          <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>⚡ Sistema Real-time</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Updates automáticos de estadísticas y nuevos insights
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Footer */}
       <footer style={{
         textAlign: 'center',
@@ -831,7 +968,7 @@ function App() {
         </p>
         {user && (
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#28a745', fontWeight: 'bold' }}>
-            🔍 MODO DEBUGGING ACTIVO - Dashboard Analytics + Generador Masivo
+            🎛️ Generador Masivo + 📊 Dashboard Analytics - Un solo bot con múltiples técnicas combinadas
           </p>
         )}
       </footer>
