@@ -9,26 +9,32 @@ const supabase = createClient(
 const MassiveGenerator = ({ user, onDataChange }) => {
   const [config, setConfig] = useState({
     nombre_base: 'Bot_Masivo',
-    activo: 'EURUSD', // Solo un activo seleccionado
-    temporalidad: '', // Solo una temporalidad
-    direccion: '', // Solo una dirección
-    tipo_entrada: '', // Solo un tipo de entrada
-    oss_config: '', // Solo una configuración OSS
-    apartador_trading: 'Sin Apartador', // Nueva opción
+    activo: 'EURUSD',
+    temporalidad: '',
+    direccion: '',
+    tipo_entrada: '',
+    oss_config: '',
+    trading_option: {
+      time_range_from: '02:00',
+      time_range_to: '22:00',
+      exit_at_end_of_range: false,
+      order_types_to_close: 'All' // All, Pending, Live
+    },
     tecnicas: {
       SPP: { enabled: false, min: 100, max: 1000 },
       WFM: { enabled: false, min: 100, max: 800 },
       'MC Trade': { enabled: false, min: 50, max: 500 },
-      'Retest MC': { enabled: false, min: 100, max: 300 }
+      'MC Lento': { enabled: false, min: 100, max: 300 } // Renombrado de "Retest MC"
     },
     parametros_avanzados: {
-      atr_periodo: 14, // Nuevo campo ATR Periodo
-      atr_multiple: 1.5, // Nuevo campo ATR Multiple
+      atr_based: false,
+      atr_multiple: { min: 1.5, max: 3.0 },
+      atr_periodo: { min: 14, max: 20 },
       periodo_min: 2,
       periodo_max: 100,
       global_min: 2,
       global_max: 130,
-      global_indicadores: 'Básicos' // Nuevo campo
+      global_indicadores: { min: 1, max: 5 } // Cambiado a rango
     },
     horario: {
       inicio: '14:00',
@@ -45,41 +51,35 @@ const MassiveGenerator = ({ user, onDataChange }) => {
   
   const [generating, setGenerating] = useState(false);
 
-  // Opciones disponibles (selección única)
+  // Opciones disponibles
   const opciones = {
     temporalidades: ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'],
     direcciones: ['Long', 'Short', 'Both'],
     tipos_entrada: ['Market', 'Limit', 'Stop'],
     oss_configs: ['Sin OSS', 'OSS Final', 'OSS Invertido', 'OSS Intermedio'],
-    apartador_trading: ['Sin Apartador', 'Apartador Básico', 'Apartador Avanzado', 'Apartador Personalizado'],
-    global_indicadores: ['Básicos', 'Avanzados', 'Profesionales', 'Personalizados'],
+    order_types_to_close: ['All', 'Pending', 'Live'],
     activos_predefinidos: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'GOLD', 'SILVER', 'OIL', 'BTC', 'ETH']
   };
 
   // Función para calcular preview de combinaciones
   useEffect(() => {
     const calcularCombinaciones = () => {
-      // Solo contar técnicas habilitadas
       const tecnicasEnabled = Object.values(config.tecnicas).filter(t => t.enabled);
       const totalTecnicas = tecnicasEnabled.length || 1;
-
-      // Con selección única, el total es igual al número de técnicas
       const total = totalTecnicas;
 
-      // Generar ejemplos de combinaciones
       const ejemplos = [];
       if (config.activo && config.temporalidad && config.direccion && config.tipo_entrada) {
         const tecnicasHabilitadas = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
         
         if (tecnicasHabilitadas.length > 0) {
           tecnicasHabilitadas.forEach((tecnica, index) => {
-            if (index < 5) { // Mostrar máximo 5 ejemplos
+            if (index < 5) {
               const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnica}_${config.oss_config || 'SinOSS'}`;
               ejemplos.push(nombre);
             }
           });
         } else {
-          // Si no hay técnicas seleccionadas, mostrar ejemplo básico
           const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_SPP_${config.oss_config || 'SinOSS'}`;
           ejemplos.push(nombre);
         }
@@ -99,6 +99,17 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     setConfig(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  // Manejar cambios en trading option
+  const handleTradingOptionChange = (field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      trading_option: {
+        ...prev.trading_option,
+        [field]: value
+      }
     }));
   };
 
@@ -123,6 +134,20 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       parametros_avanzados: {
         ...prev.parametros_avanzados,
         [parametro]: isNaN(parseFloat(value)) ? value : parseFloat(value)
+      }
+    }));
+  };
+
+  // Manejar cambios en rangos de parámetros avanzados
+  const handleRangeChange = (parametro, tipo, value) => {
+    setConfig(prev => ({
+      ...prev,
+      parametros_avanzados: {
+        ...prev.parametros_avanzados,
+        [parametro]: {
+          ...prev.parametros_avanzados[parametro],
+          [tipo]: parseFloat(value)
+        }
       }
     }));
   };
@@ -157,7 +182,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
     setGenerating(true);
     try {
-      // Obtener próximo magic number base
       const { data: maxMagic } = await supabase
         .from('bot_configurations')
         .select('magic_number')
@@ -167,7 +191,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
       let magicNumberBase = (maxMagic?.[0]?.magic_number || 1000) + 1;
 
-      // Generar configuraciones
       const configuraciones = [];
       const tecnicasToUse = tecnicasEnabled.length ? tecnicasEnabled : ['SPP'];
       
@@ -187,24 +210,25 @@ const MassiveGenerator = ({ user, onDataChange }) => {
           direccion: config.direccion,
           tipo_entrada: config.tipo_entrada,
           oss_config: config.oss_config || 'Sin OSS',
-          apartador_trading: config.apartador_trading,
+          trading_option: config.trading_option,
           tecnicas_simulaciones: { [tecnica]: simulaciones },
-          atr_periodo: config.parametros_avanzados.atr_periodo,
-          atr_multiple: config.parametros_avanzados.atr_multiple,
-          atr_min: 5, // Valor por defecto
-          atr_max: 20, // Valor por defecto
+          atr_based: config.parametros_avanzados.atr_based,
+          atr_multiple_min: config.parametros_avanzados.atr_multiple.min,
+          atr_multiple_max: config.parametros_avanzados.atr_multiple.max,
+          atr_periodo_min: config.parametros_avanzados.atr_periodo.min,
+          atr_periodo_max: config.parametros_avanzados.atr_periodo.max,
           periodo_min: config.parametros_avanzados.periodo_min,
           periodo_max: config.parametros_avanzados.periodo_max,
           global_min: config.parametros_avanzados.global_min,
           global_max: config.parametros_avanzados.global_max,
-          global_indicadores: config.parametros_avanzados.global_indicadores,
+          global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
+          global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
           horario_inicio: config.horario.inicio,
           horario_fin: config.horario.fin,
           estado: 'Generado'
         });
       }
 
-      // Insertar configuraciones
       const { error } = await supabase
         .from('bot_configurations')
         .insert(configuraciones);
@@ -216,7 +240,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
       alert(`¡${configuraciones.length} configuración(es) creada(s) exitosamente!`);
       
-      // Callback para refrescar datos en el dashboard principal
       if (onDataChange) {
         await onDataChange();
       }
@@ -367,7 +390,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 )}
               </div>
               
-              {/* Mostrar activo personalizado actual si no está en predefinidos */}
               {!opciones.activos_predefinidos.includes(config.activo) && config.activo && (
                 <div style={{ 
                   marginTop: '10px', 
@@ -383,7 +405,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Temporalidades - Selección única */}
+          {/* Temporalidades */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e3f2fd', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#1976d2' }}>⏰ Temporalidad (Selección única)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '10px' }}>
@@ -414,7 +436,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Direcciones - Selección única */}
+          {/* Direcciones */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>📈 Dirección de Trading (Selección única)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -446,7 +468,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Tipos de Entrada - Selección única */}
+          {/* Tipos de Entrada */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🎯 Tipo de Entrada (Selección única)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -478,7 +500,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* OSS - Selección única */}
+          {/* OSS */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#fff3e0', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#f57c00' }}>🔧 Configuración OSS (Selección única)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
@@ -511,40 +533,98 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Apartador de Trading Option */}
+          {/* Trading Option - Mejorado según imagen */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Apartador de Trading Option</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-              {opciones.apartador_trading.map(apartador => (
-                <label key={apartador} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  padding: '12px',
-                  background: config.apartador_trading === apartador ? '#0277bd' : 'white',
-                  color: config.apartador_trading === apartador ? 'white' : '#333',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: '2px solid #0277bd',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}>
-                  <input
-                    type="radio"
-                    name="apartador_trading"
-                    value={apartador}
-                    checked={config.apartador_trading === apartador}
-                    onChange={(e) => handleSingleChange('apartador_trading', e.target.value)}
-                    style={{ display: 'none' }}
-                  />
-                  <span>{apartador}</span>
+            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Trading Option</h3>
+            
+            {/* Time Range */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Time Range From 🕐:
                 </label>
-              ))}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    value={config.trading_option.time_range_from}
+                    onChange={(e) => handleTradingOptionChange('time_range_from', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px'
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
+                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Time Range To 🕐:
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    value={config.trading_option.time_range_to}
+                    onChange={(e) => handleTradingOptionChange('time_range_to', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px'
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
+                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Exit At End Of Range */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={config.trading_option.exit_at_end_of_range}
+                  onChange={(e) => handleTradingOptionChange('exit_at_end_of_range', e.target.checked)}
+                  style={{ transform: 'scale(1.2)' }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Exit At End Of Range 🕐</span>
+              </label>
+            </div>
+
+            {/* Order Types To Close */}
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                Order Types To Close 🕐:
+              </label>
+              <select
+                value={config.trading_option.order_types_to_close}
+                onChange={(e) => handleTradingOptionChange('order_types_to_close', e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '5px',
+                  fontSize: '14px',
+                  background: 'white'
+                }}
+              >
+                <option value="All">All (Todas las órdenes)</option>
+                <option value="Pending">Pending (Solo órdenes pendientes)</option>
+                <option value="Live">Live (Solo órdenes en vivo)</option>
+              </select>
             </div>
           </div>
 
-          {/* Técnicas Avanzadas (múltiples permitidas) */}
+          {/* Técnicas Avanzadas - MC Lento renombrado */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
             {Object.keys(config.tecnicas).map(tecnica => (
@@ -611,56 +691,132 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             ))}
           </div>
 
-          {/* Parámetros Avanzados */}
+          {/* Parámetros Avanzados - Mejorado según imagen */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-              
-              {/* ATR Periodo */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  ATR Período:
-                </label>
+            {/* ATR-based Checkbox */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
-                  type="number"
-                  value={config.parametros_avanzados.atr_periodo}
-                  onChange={(e) => handleParametroChange('atr_periodo', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                  min="1"
-                  max="50"
+                  type="checkbox"
+                  checked={config.parametros_avanzados.atr_based}
+                  onChange={(e) => handleParametroChange('atr_based', e.target.checked)}
+                  style={{ transform: 'scale(1.2)' }}
                 />
-              </div>
+                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>ATR-based</span>
+              </label>
+            </div>
 
-              {/* ATR Multiple */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+              
+              {/* ATR Multiple - Rango */}
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
                   ATR Multiple:
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={config.parametros_avanzados.atr_multiple}
-                  onChange={(e) => handleParametroChange('atr_multiple', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                  min="0.1"
-                  max="5.0"
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={config.parametros_avanzados.atr_multiple.min}
+                      onChange={(e) => handleRangeChange('atr_multiple', 'min', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="0.1"
+                      max="10.0"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={config.parametros_avanzados.atr_multiple.max}
+                      onChange={(e) => handleRangeChange('atr_multiple', 'max', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="0.1"
+                      max="10.0"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+                  Mín: {config.parametros_avanzados.atr_multiple.min} - Máx: {config.parametros_avanzados.atr_multiple.max}
+                </div>
               </div>
 
-              {/* Período Mín */}
+              {/* ATR Period - Rango */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                  ATR Period:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <input
+                      type="number"
+                      value={config.parametros_avanzados.atr_periodo.min}
+                      onChange={(e) => handleRangeChange('atr_periodo', 'min', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="1"
+                      max="100"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      value={config.parametros_avanzados.atr_periodo.max}
+                      onChange={(e) => handleRangeChange('atr_periodo', 'max', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="1"
+                      max="100"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+                  Mín: {config.parametros_avanzados.atr_periodo.min} - Máx: {config.parametros_avanzados.atr_periodo.max}
+                </div>
+              </div>
+
+              {/* Otros parámetros simples */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Período Mín:
@@ -679,7 +835,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 />
               </div>
 
-              {/* Período Máx */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Período Máx:
@@ -698,7 +853,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 />
               </div>
 
-              {/* Global Mín */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Global Mín:
@@ -717,7 +871,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 />
               </div>
 
-              {/* Global Máx */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Global Máx:
@@ -737,38 +890,46 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </div>
             </div>
 
-            {/* Global Indicadores */}
-            <div style={{ marginTop: '15px' }}>
+            {/* Global Indicadores - Rango */}
+            <div style={{ marginTop: '20px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                Global Indicadores:
+                Global Indicadores (Rango):
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                {opciones.global_indicadores.map(indicador => (
-                  <label key={indicador} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '5px',
-                    padding: '10px',
-                    background: config.parametros_avanzados.global_indicadores === indicador ? '#7b1fa2' : 'white',
-                    color: config.parametros_avanzados.global_indicadores === indicador ? 'white' : '#333',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    border: '2px solid #7b1fa2',
-                    justifyContent: 'center',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}>
-                    <input
-                      type="radio"
-                      name="global_indicadores"
-                      value={indicador}
-                      checked={config.parametros_avanzados.global_indicadores === indicador}
-                      onChange={(e) => handleParametroChange('global_indicadores', e.target.value)}
-                      style={{ display: 'none' }}
-                    />
-                    <span>{indicador}</span>
-                  </label>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', maxWidth: '400px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666' }}>Mínimo:</label>
+                  <input
+                    type="number"
+                    value={config.parametros_avanzados.global_indicadores.min}
+                    onChange={(e) => handleRangeChange('global_indicadores', 'min', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px'
+                    }}
+                    min="1"
+                    max="10"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666' }}>Máximo:</label>
+                  <input
+                    type="number"
+                    value={config.parametros_avanzados.global_indicadores.max}
+                    onChange={(e) => handleRangeChange('global_indicadores', 'max', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px'
+                    }}
+                    min="1"
+                    max="10"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -859,7 +1020,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 • Dirección: <strong>{config.direccion || 'No seleccionada'}</strong><br/>
                 • Tipo Entrada: <strong>{config.tipo_entrada || 'No seleccionado'}</strong><br/>
                 • OSS: <strong>{config.oss_config || 'No seleccionado'}</strong><br/>
-                • Apartador: <strong>{config.apartador_trading}</strong><br/>
+                • Time Range: <strong>{config.trading_option.time_range_from} - {config.trading_option.time_range_to}</strong><br/>
+                • Order Close: <strong>{config.trading_option.order_types_to_close}</strong><br/>
                 • Técnicas: <strong>{Object.values(config.tecnicas).filter(t => t.enabled).length || 'Ninguna'}</strong>
               </div>
             </div>
