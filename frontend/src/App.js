@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import MassiveGenerator from './components/MassiveGenerator';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -12,6 +13,7 @@ function App() {
   const [globalPatterns, setGlobalPatterns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(false);
 
   // Función para cargar todos los datos
   const loadAllData = async () => {
@@ -160,6 +162,56 @@ function App() {
     );
   }
 
+  // Si se está mostrando el generador, renderizar solo eso
+  if (showGenerator) {
+    return (
+      <div>
+        {/* Botón para volver al dashboard */}
+        <div style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          right: '20px', 
+          zIndex: 1000,
+          display: 'flex',
+          gap: '10px'
+        }}>
+          <button
+            onClick={() => setShowGenerator(false)}
+            style={{
+              padding: '10px 20px',
+              background: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            📊 Volver al Dashboard
+          </button>
+          {user && (
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 20px',
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Cerrar Sesión
+            </button>
+          )}
+        </div>
+        <MassiveGenerator user={user} onDataChange={loadAllData} />
+      </div>
+    );
+  }
+
   return (
     <div style={{
       padding: '20px',
@@ -218,7 +270,23 @@ function App() {
                 />
               )}
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowGenerator(true)}
+                style={{
+                  padding: '12px 24px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                }}
+              >
+                🎛️ Generador Masivo
+              </button>
               <button
                 onClick={createSampleBot}
                 disabled={creating}
@@ -256,6 +324,9 @@ function App() {
               <span style={{ fontSize: '16px', color: '#6c757d' }}>
                 🔐 Inicia sesión para acceder a todas las funcionalidades
               </span>
+              <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
+                Usa tu cuenta GitHub para autenticarte de forma segura
+              </div>
             </div>
             <button
               onClick={handleLogin}
@@ -267,10 +338,14 @@ function App() {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '16px',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
-              📱 Iniciar Sesión con GitHub
+              <span>📱</span>
+              Iniciar Sesión con GitHub
             </button>
           </>
         )}
@@ -368,9 +443,23 @@ function App() {
                 🚀 ¡Comienza Creando tu Primer Bot!
               </h3>
               <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
-                Usa el botón <strong>"Crear Bot Ejemplo"</strong> para probar el sistema. 
-                Una vez creado, aparecerá aquí y comenzará a contribuir a las estadísticas globales.
+                Usa el botón <strong>"Crear Bot Ejemplo"</strong> para probar el sistema, o 
+                el <strong>"Generador Masivo"</strong> para crear múltiples configuraciones avanzadas. 
               </p>
+              <div style={{
+                background: 'rgba(255,255,255,0.8)',
+                padding: '15px',
+                borderRadius: '10px',
+                marginTop: '15px'
+              }}>
+                <p style={{ margin: '0 0 10px 0', color: '#1976d2', fontWeight: 'bold' }}>
+                  🎛️ Generador Masivo Disponible
+                </p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Checkboxes exclusivos, técnicas SPP/WFM/MC Trade, configuración OSS, 
+                  generación de hasta 1000+ configuraciones únicas.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -427,4 +516,119 @@ function App() {
               🎯 Tu "Wikipedia del Trading Algorítmico" Está Lista
             </h3>
             <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
-              Los patrones exitosos de la comunidad aparecerán aquí cuando los usuarios evalúen sus estrat
+              Los patrones exitosos de la comunidad aparecerán aquí cuando los usuarios evalúen sus estrategias.
+              ¡Sé el primero en contribuir!
+            </p>
+            {user && (
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.1)',
+                padding: '20px',
+                borderRadius: '10px',
+                marginTop: '20px'
+              }}>
+                <p style={{ margin: '0 0 10px 0', color: '#667eea', fontWeight: 'bold' }}>
+                  🎛️ Genera Múltiples Configuraciones
+                </p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Usa el Generador Masivo para crear cientos de configuraciones con 
+                  checkboxes exclusivos y técnicas avanzadas. Contribuye a la inteligencia colectiva.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Funcionalidades del Sistema */}
+      <div style={{
+        background: 'white',
+        padding: '25px',
+        borderRadius: '15px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+          🚀 Tu Plataforma de Inteligencia Colectiva
+        </h2>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+          <div style={{ 
+            padding: '15px', 
+            background: user ? '#e3f2fd' : '#f8f9fa', 
+            borderRadius: '8px',
+            border: user ? '2px solid #1976d2' : '1px solid #dee2e6'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', color: user ? '#1976d2' : '#6c757d' }}>
+              🎛️ Generador Masivo {user ? '✅' : '🔒'}
+            </h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Checkboxes exclusivos, técnicas SPP/WFM/MC Trade, configuración OSS
+            </p>
+            {user && (
+              <button
+                onClick={() => setShowGenerator(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 16px',
+                  background: '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Abrir Generador
+              </button>
+            )}
+          </div>
+          
+          <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>📊 Dashboard Global</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Comparación personal vs global, benchmarking automático
+            </p>
+          </div>
+          
+          <div style={{ padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>🧠 IA Recomendaciones</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Sugerencias basadas en patrones exitosos de la comunidad
+            </p>
+          </div>
+          
+          <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>⚡ Sistema Real-time</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Updates automáticos de estadísticas y nuevos insights
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer style={{
+        textAlign: 'center',
+        padding: '30px 20px',
+        color: '#666',
+        borderTop: '1px solid #eee',
+        marginTop: '40px'
+      }}>
+        <p style={{ margin: 0 }}>
+          🤖 <strong>Mining Intelligence Platform</strong> - 
+          La primera plataforma colaborativa para encontrar las mejores estrategias de trading algorítmico
+        </p>
+        <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
+          ✅ Sistema funcionando: Supabase + React + GitHub OAuth + Netlify - {user ? 'Autenticado' : 'Listo para autenticar'}
+        </p>
+        {user && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#28a745', fontWeight: 'bold' }}>
+            🎛️ Generador Masivo activado - Crea cientos de configuraciones con checkboxes exclusivos
+          </p>
+        )}
+      </footer>
+    </div>
+  );
+}
+
+export default App;
