@@ -15,11 +15,11 @@ function App() {
   const [creating, setCreating] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
   const [authError, setAuthError] = useState(null);
+  const [deleting, setDeleting] = useState(null); // Para mostrar estado de eliminación
 
   // Función para cargar todos los datos
   const loadAllData = async () => {
     try {
-      // Obtener estadísticas globales
       const { data: patterns } = await supabase
         .from('global_mining_patterns')
         .select('*')
@@ -28,7 +28,6 @@ function App() {
 
       setGlobalPatterns(patterns || []);
 
-      // Si hay usuario, obtener sus bots
       if (user) {
         const { data: bots } = await supabase
           .from('bot_configurations')
@@ -38,7 +37,6 @@ function App() {
 
         setUserBots(bots || []);
 
-        // Calcular estadísticas del usuario
         const userStats = {
           total_bots: bots?.length || 0,
           active_bots: bots?.filter(bot => bot.estado === 'Activo').length || 0,
@@ -54,14 +52,77 @@ function App() {
     }
   };
 
+  // FUNCIÓN PARA ELIMINAR BOT INDIVIDUAL
+  const eliminarBot = async (botId, nombreBot) => {
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar el bot "${nombreBot}"?\n\nEsta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    setDeleting(botId);
+    try {
+      const { error } = await supabase
+        .from('bot_configurations')
+        .delete()
+        .eq('id', botId)
+        .eq('user_id', user.id); // Seguridad adicional
+
+      if (error) {
+        console.error('Error eliminando bot:', error);
+        alert('Error al eliminar el bot: ' + error.message);
+      } else {
+        alert('Bot eliminado exitosamente');
+        await loadAllData(); // Refrescar datos
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error inesperado al eliminar el bot');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  // FUNCIÓN PARA ELIMINAR TODOS LOS BOTS DE EJEMPLO
+  const eliminarTodosLosBots = async () => {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar TODOS tus bots?\n\nEsta acción no se puede deshacer y eliminará todos los bots asociados a tu cuenta.')) {
+      return;
+    }
+
+    if (!window.confirm('⚠️ CONFIRMACIÓN FINAL ⚠️\n\n¿Realmente quieres eliminar TODOS los bots?\n\nEscribe "ELIMINAR" en la siguiente ventana para confirmar.')) {
+      return;
+    }
+
+    const confirmacion = prompt('Para confirmar la eliminación de TODOS los bots, escribe exactamente: ELIMINAR');
+    if (confirmacion !== 'ELIMINAR') {
+      alert('Eliminación cancelada. No se escribió la confirmación correcta.');
+      return;
+    }
+
+    setDeleting('all');
+    try {
+      const { error } = await supabase
+        .from('bot_configurations')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error eliminando todos los bots:', error);
+        alert('Error al eliminar los bots: ' + error.message);
+      } else {
+        alert('Todos los bots han sido eliminados exitosamente');
+        await loadAllData();
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error inesperado al eliminar los bots');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   useEffect(() => {
-    // Función para obtener la sesión actual - MEJORADA
     const initializeAuth = async () => {
       try {
-        // Limpiar cualquier error previo
         setAuthError(null);
-
-        // Obtener sesión actual
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -80,7 +141,6 @@ function App() {
 
     initializeAuth();
 
-    // Escuchar cambios de autenticación - MEJORADO
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth event:', event, session?.user?.email || 'No user');
@@ -88,11 +148,9 @@ function App() {
         setUser(session?.user ?? null);
         setAuthError(null);
         
-        // Manejar diferentes eventos
         switch (event) {
           case 'SIGNED_IN':
             console.log('Usuario logueado exitosamente');
-            // Limpiar URL si hay hash de OAuth
             if (window.location.hash.includes('access_token')) {
               window.history.replaceState(null, '', window.location.pathname);
             }
@@ -115,7 +173,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Cargar datos cuando cambie el usuario
   useEffect(() => {
     if (!loading && user) {
       loadAllData();
@@ -141,7 +198,6 @@ function App() {
         console.error('Error in login:', error);
         setAuthError(error.message);
         
-        // Mensajes de error más específicos
         if (error.message.includes('provider is not enabled')) {
           alert('El proveedor GitHub no está habilitado. Verifica la configuración en Supabase.');
         } else if (error.message.includes('Invalid login credentials')) {
@@ -244,11 +300,9 @@ function App() {
     );
   }
 
-  // Si se está mostrando el generador, renderizar solo eso
   if (showGenerator) {
     return (
       <div>
-        {/* Botón para volver al dashboard */}
         <div style={{ 
           position: 'fixed', 
           top: '20px', 
@@ -348,7 +402,7 @@ function App() {
         </p>
       </header>
 
-      {/* Authentication Status - MEJORADO */}
+      {/* Authentication Status */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -475,7 +529,7 @@ function App() {
         )}
       </div>
 
-      {/* Dashboard Personal (si hay usuario) */}
+      {/* Dashboard Personal CON FUNCIONALIDAD DE ELIMINACIÓN */}
       {user && (
         <div style={{
           background: 'white',
@@ -484,9 +538,30 @@ function App() {
           boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
           marginBottom: '30px'
         }}>
-          <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
-            👤 Tu Dashboard Personal
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0, color: '#333' }}>
+              👤 Tu Dashboard Personal
+            </h2>
+            {/* BOTÓN PARA ELIMINAR TODOS LOS BOTS */}
+            {userBots.length > 0 && (
+              <button
+                onClick={eliminarTodosLosBots}
+                disabled={deleting === 'all'}
+                style={{
+                  padding: '8px 16px',
+                  background: deleting === 'all' ? '#6c757d' : '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: deleting === 'all' ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {deleting === 'all' ? '⏳ Eliminando...' : '🗑️ Eliminar Todos los Bots'}
+              </button>
+            )}
+          </div>
           
           {/* Estadísticas Personales */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '20px' }}>
@@ -510,12 +585,12 @@ function App() {
             </div>
           </div>
 
-          {/* Lista de Bots */}
+          {/* Lista de Bots CON BOTONES DE ELIMINAR */}
           {userBots.length > 0 ? (
             <div>
               <h3 style={{ margin: '20px 0 15px 0', color: '#333' }}>🤖 Tus Bots Creados</h3>
               <div style={{ display: 'grid', gap: '10px' }}>
-                {userBots.slice(0, 5).map((bot) => (
+                {userBots.slice(0, 10).map((bot) => (
                   <div key={bot.id} style={{
                     padding: '15px',
                     background: '#f8f9fa',
@@ -525,7 +600,7 @@ function App() {
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <h4 style={{ margin: '0 0 5px 0', color: '#333' }}>
                         {bot.nombre_base}
                       </h4>
@@ -533,26 +608,46 @@ function App() {
                         {bot.activo} - {bot.temporalidad} - {bot.direccion} - {bot.tipo_entrada}
                         {bot.oss_config !== 'Sin OSS' && ` - ${bot.oss_config}`}
                       </p>
-                                            <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
                         Magic Number: {bot.magic_number} | Estado: {bot.estado}
                         {bot.total_simulaciones && ` | Total Simulaciones: ${bot.total_simulaciones}`}
                       </p>
                     </div>
-                    <div style={{
-                      padding: '5px 10px',
-                      background: bot.estado === 'Activo' ? '#d4edda' : '#fff3cd',
-                      color: bot.estado === 'Activo' ? '#155724' : '#856404',
-                      borderRadius: '15px',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
-                    }}>
-                      {bot.estado}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        padding: '5px 10px',
+                        background: bot.estado === 'Activo' ? '#d4edda' : '#fff3cd',
+                        color: bot.estado === 'Activo' ? '#155724' : '#856404',
+                        borderRadius: '15px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {bot.estado}
+                      </div>
+                      {/* BOTÓN ELIMINAR INDIVIDUAL */}
+                      <button
+                        onClick={() => eliminarBot(bot.id, bot.nombre_base)}
+                        disabled={deleting === bot.id}
+                        style={{
+                          padding: '5px 10px',
+                          background: deleting === bot.id ? '#6c757d' : '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '5px',
+                          cursor: deleting === bot.id ? 'not-allowed' : 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}
+                        title={`Eliminar bot ${bot.nombre_base}`}
+                      >
+                        {deleting === bot.id ? '⏳' : '🗑️'}
+                      </button>
                     </div>
                   </div>
                 ))}
-                {userBots.length > 5 && (
+                {userBots.length > 10 && (
                   <div style={{ textAlign: 'center', padding: '10px', color: '#666' }}>
-                    ... y {userBots.length - 5} bots más
+                    ... y {userBots.length - 10} bots más
                   </div>
                 )}
               </div>
@@ -757,4 +852,3 @@ function App() {
 }
 
 export default App;
-

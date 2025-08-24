@@ -34,8 +34,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
         enabled: false, 
         min: 100, 
         max: 300,
-        spread_min: 1.0,  // NUEVO CAMPO
-        spread_max: 3.0   // NUEVO CAMPO
+        spread_min: 1.0,
+        spread_max: 3.0
       },
       'Secuencial': { enabled: false, min: 50, max: 200 },
       'High Back Test Precision': { enabled: false, min: 200, max: 800 }
@@ -49,7 +49,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       global_min: 2,
       global_max: 130,
       global_indicadores: { min: 1, max: 5 },
-      spread_minado: { min: 0.5, max: 2.0 } // NUEVO CAMPO SPREAD DE MINADO
+      spread_minado: 1.0 // VALOR ÚNICO
     }
   });
 
@@ -133,7 +133,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }));
   };
 
-  // Manejar cambios en técnicas - ACTUALIZADO PARA MC LENTO
+  // Manejar cambios en técnicas
   const handleTecnicaChange = (tecnica, field, value) => {
     setConfig(prev => ({
       ...prev,
@@ -258,8 +258,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
         global_max: config.parametros_avanzados.global_max,
         global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
         global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
-        spread_minado_min: config.parametros_avanzados.spread_minado.min, // NUEVO CAMPO
-        spread_minado_max: config.parametros_avanzados.spread_minado.max, // NUEVO CAMPO
+        spread_minado: config.parametros_avanzados.spread_minado, // VALOR ÚNICO
         estado: 'Generado'
       };
 
@@ -715,7 +714,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Trading Option */}
+          {/* Trading Option - EN ESPAÑOL */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Opciones de Trading</h3>
             
@@ -921,7 +920,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             ))}
           </div>
 
-          {/* Parámetros Avanzados - CON SPREAD DE MINADO */}
+          {/* Parámetros Avanzados - CON SPREAD ÚNICO */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
             
@@ -1045,61 +1044,36 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 </div>
               </div>
 
-              {/* Spread de Minado - NUEVO CAMPO */}
+              {/* Spread de Minado - VALOR ÚNICO */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
                   Spread de Minado:
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.spread_minado.min}
-                      onChange={(e) => handleRangeChange('spread_minado', 'min', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.spread_minado.max}
-                      onChange={(e) => handleRangeChange('spread_minado', 'max', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={config.parametros_avanzados.spread_minado}
+                  onChange={(e) => handleParametroChange('spread_minado', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                  min="0.1"
+                  max="10.0"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                  <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                  <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
                 </div>
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-                  Mín: {config.parametros_avanzados.spread_minado.min} - Máx: {config.parametros_avanzados.spread_minado.max}
+                  Valor: {config.parametros_avanzados.spread_minado}
                 </div>
               </div>
 
-              {/* Otros parámetros */}
+              {/* Otros parámetros simples */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Período Mín:
@@ -1219,9 +1193,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
         </div>
 
-        {/* Panel de Preview y Generación - ACTUALIZADO */}
+        {/* Panel de Preview y Generación - COMPLETO */}
         <div>
-          
           <div style={{
             position: 'sticky',
             top: '20px',
@@ -1247,7 +1220,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </div>
             </div>
 
-            {/* CONFIGURACIÓN COMPLETA EN PREVIEW */}
             <div style={{ marginBottom: '15px' }}>
               <strong>Configuración:</strong>
               <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '5px' }}>
@@ -1268,7 +1240,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 
                 {/* PARÁMETROS AVANZADOS */}
                 • <strong>ATR Multiple:</strong> {config.parametros_avanzados.atr_multiple.min} - {config.parametros_avanzados.atr_multiple.max}<br/>
-                • <strong>Spread Minado:</strong> {config.parametros_avanzados.spread_minado.min} - {config.parametros_avanzados.spread_minado.max}<br/>
+                • <strong>Spread Minado:</strong> {config.parametros_avanzados.spread_minado}<br/>
                 
                 {/* TÉCNICAS */}
                 • <strong>Técnicas:</strong> {Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).length || 'Ninguna'}
@@ -1342,7 +1314,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </div>
             )}
           </div>
-
         </div>
 
       </div>
