@@ -1,38 +1,36 @@
-@"
 {
   "name": "mining-intelligence-frontend",
   "version": "1.0.0",
-  "description": "Frontend for Mining Intelligence Platform",
+  "description": "Frontend for mining intelligence",
   "main": "src/index.js",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test": "react-scripts test"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.18.0",
-    "axios": "^1.6.0",
-    "chart.js": "^4.4.0",
-    "react-chartjs-2": "^5.2.0",
-    "tailwindcss": "^3.3.5",
+    "react-router-dom": "^6.14.1",
+    "axios": "^1.3.4",
+    "chart.js": "^4.3.0",
+    "react-chartjs-2": "^5.0.1",
+    "tailwindcss": "^3.3.1",
     "@heroicons/react": "^2.0.18",
-    "react-hook-form": "^7.47.0",
+    "react-hook-form": "^7.43.9",
     "react-query": "^3.39.3",
-    "jwt-decode": "^4.0.0"
+    "jwt-decode": "^3.1.2"
   },
   "devDependencies": {
     "react-scripts": "5.0.1",
-    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0"
   },
   "browserslist": {
     "production": [
       ">0.2%",
-      "not dead", 
+      "not dead",
       "not op_mini all"
     ],
     "development": [
@@ -42,4 +40,3 @@
     ]
   }
 }
-"@ | Out-File -FilePath "frontend/package.json" -Encoding utf8
