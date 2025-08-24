@@ -14,17 +14,23 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     direccion: '',
     tipo_entrada: '',
     oss_config: '',
+    horario_avanzado: {
+      exit_at_end_of_day: true,
+      end_of_day_exit_time: '15:00',
+      exit_on_friday: true,
+      friday_exit_time: '23:00'
+    },
     trading_option: {
       time_range_from: '02:00',
       time_range_to: '22:00',
       exit_at_end_of_range: false,
-      order_types_to_close: 'All' // All, Pending, Live
+      order_types_to_close: 'All'
     },
     tecnicas: {
       SPP: { enabled: false, min: 100, max: 1000 },
       WFM: { enabled: false, min: 100, max: 800 },
       'MC Trade': { enabled: false, min: 50, max: 500 },
-      'MC Lento': { enabled: false, min: 100, max: 300 } // Renombrado de "Retest MC"
+      'MC Lento': { enabled: false, min: 100, max: 300 }
     },
     parametros_avanzados: {
       atr_based: false,
@@ -34,11 +40,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       periodo_max: 100,
       global_min: 2,
       global_max: 130,
-      global_indicadores: { min: 1, max: 5 } // Cambiado a rango
-    },
-    horario: {
-      inicio: '14:00',
-      fin: '20:00'
+      global_indicadores: { min: 1, max: 5 }
     }
   });
 
@@ -57,7 +59,11 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     direcciones: ['Long', 'Short', 'Both'],
     tipos_entrada: ['Market', 'Limit', 'Stop'],
     oss_configs: ['Sin OSS', 'OSS Final', 'OSS Invertido', 'OSS Intermedio'],
-    order_types_to_close: ['All', 'Pending', 'Live'],
+    order_types_to_close: [
+      { value: 'All', label: 'Todas las órdenes' },
+      { value: 'Pending', label: 'Solo órdenes pendientes' },
+      { value: 'Live', label: 'Solo órdenes en vivo' }
+    ],
     activos_predefinidos: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'GOLD', 'SILVER', 'OIL', 'BTC', 'ETH']
   };
 
@@ -99,6 +105,17 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     setConfig(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  // Manejar cambios en horario avanzado
+  const handleHorarioAvanzadoChange = (field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      horario_avanzado: {
+        ...prev.horario_avanzado,
+        [field]: value
+      }
     }));
   };
 
@@ -210,6 +227,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
           direccion: config.direccion,
           tipo_entrada: config.tipo_entrada,
           oss_config: config.oss_config || 'Sin OSS',
+          horario_avanzado: config.horario_avanzado,
           trading_option: config.trading_option,
           tecnicas_simulaciones: { [tecnica]: simulaciones },
           atr_based: config.parametros_avanzados.atr_based,
@@ -223,8 +241,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
           global_max: config.parametros_avanzados.global_max,
           global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
           global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
-          horario_inicio: config.horario.inicio,
-          horario_fin: config.horario.fin,
           estado: 'Generado'
         });
       }
@@ -533,15 +549,172 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Trading Option - Mejorado según imagen */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Trading Option</h3>
+          {/* Horario Avanzado - NUEVO DISEÑO (encima de Trading Option) */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🕐 Configuración de Horarios</h3>
             
-            {/* Time Range */}
+            {/* Exit At End Of Day */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
+                  Exit At End Of Day 🕐:
+                </span>
+                <div style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '60px',
+                  height: '34px'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={config.horario_avanzado.exit_at_end_of_day}
+                    onChange={(e) => handleHorarioAvanzadoChange('exit_at_end_of_day', e.target.checked)}
+                    style={{
+                      opacity: 0,
+                      width: 0,
+                      height: 0
+                    }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    cursor: 'pointer',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: config.horario_avanzado.exit_at_end_of_day ? '#007bff' : '#ccc',
+                    transition: '0.4s',
+                    borderRadius: '34px'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      content: '""',
+                      height: '26px',
+                      width: '26px',
+                      left: config.horario_avanzado.exit_at_end_of_day ? '30px' : '4px',
+                      bottom: '4px',
+                      backgroundColor: 'white',
+                      transition: '0.4s',
+                      borderRadius: '50%'
+                    }}></span>
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* End Of Day Exit Time */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
+                  End Of Day Exit Time 🕐:
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    value={config.horario_avanzado.end_of_day_exit_time}
+                    onChange={(e) => handleHorarioAvanzadoChange('end_of_day_exit_time', e.target.value)}
+                    style={{
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px',
+                      marginRight: '10px'
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* Exit On Friday */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
+                  Exit On Friday 🕐:
+                </span>
+                <div style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '60px',
+                  height: '34px'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={config.horario_avanzado.exit_on_friday}
+                    onChange={(e) => handleHorarioAvanzadoChange('exit_on_friday', e.target.checked)}
+                    style={{
+                      opacity: 0,
+                      width: 0,
+                      height: 0
+                    }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    cursor: 'pointer',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: config.horario_avanzado.exit_on_friday ? '#007bff' : '#ccc',
+                    transition: '0.4s',
+                    borderRadius: '34px'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      content: '""',
+                      height: '26px',
+                      width: '26px',
+                      left: config.horario_avanzado.exit_on_friday ? '30px' : '4px',
+                      bottom: '4px',
+                      backgroundColor: 'white',
+                      transition: '0.4s',
+                      borderRadius: '50%'
+                    }}></span>
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* Friday Exit Time */}
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
+                  Friday Exit Time 🕐:
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    value={config.horario_avanzado.friday_exit_time}
+                    onChange={(e) => handleHorarioAvanzadoChange('friday_exit_time', e.target.value)}
+                    style={{
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px',
+                      marginRight: '10px'
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Trading Option - EN ESPAÑOL */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Opciones de Trading</h3>
+            
+            {/* Rango de Tiempo */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Time Range From 🕐:
+                  Rango de Tiempo Desde 🕐:
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <input
@@ -557,14 +730,14 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                     }}
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
-                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
                   </div>
                 </div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Time Range To 🕐:
+                  Rango de Tiempo Hasta 🕐:
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <input
@@ -580,14 +753,14 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                     }}
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
-                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Exit At End Of Range */}
+            {/* Salir al Final del Rango */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
@@ -596,14 +769,14 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                   onChange={(e) => handleTradingOptionChange('exit_at_end_of_range', e.target.checked)}
                   style={{ transform: 'scale(1.2)' }}
                 />
-                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Exit At End Of Range 🕐</span>
+                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Salir al Final del Rango 🕐</span>
               </label>
             </div>
 
-            {/* Order Types To Close */}
+            {/* Tipos de Órdenes a Cerrar */}
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                Order Types To Close 🕐:
+                Tipos de Órdenes a Cerrar 🕐:
               </label>
               <select
                 value={config.trading_option.order_types_to_close}
@@ -617,14 +790,16 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                   background: 'white'
                 }}
               >
-                <option value="All">All (Todas las órdenes)</option>
-                <option value="Pending">Pending (Solo órdenes pendientes)</option>
-                <option value="Live">Live (Solo órdenes en vivo)</option>
+                {opciones.order_types_to_close.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* Técnicas Avanzadas - MC Lento renombrado */}
+          {/* Técnicas Avanzadas */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
             {Object.keys(config.tecnicas).map(tecnica => (
@@ -691,7 +866,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             ))}
           </div>
 
-          {/* Parámetros Avanzados - Mejorado según imagen */}
+          {/* Parámetros Avanzados */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
             
@@ -733,8 +908,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                       max="10.0"
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
                     </div>
                   </div>
                   <div>
@@ -754,8 +929,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                       max="10.0"
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
                     </div>
                   </div>
                 </div>
@@ -786,8 +961,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                       max="100"
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
                     </div>
                   </div>
                   <div>
@@ -806,8 +981,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                       max="100"
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
                     </div>
                   </div>
                 </div>
@@ -934,53 +1109,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Horario de Trading */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🕐 Horario de Trading</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Hora Inicio:
-                </label>
-                <input
-                  type="time"
-                  value={config.horario.inicio}
-                  onChange={(e) => setConfig(prev => ({
-                    ...prev,
-                    horario: { ...prev.horario, inicio: e.target.value }
-                  }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Hora Fin:
-                </label>
-                <input
-                  type="time"
-                  value={config.horario.fin}
-                  onChange={(e) => setConfig(prev => ({
-                    ...prev,
-                    horario: { ...prev.horario, fin: e.target.value }
-                  }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
         </div>
 
         {/* Panel de Preview y Generación */}
@@ -1020,8 +1148,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 • Dirección: <strong>{config.direccion || 'No seleccionada'}</strong><br/>
                 • Tipo Entrada: <strong>{config.tipo_entrada || 'No seleccionado'}</strong><br/>
                 • OSS: <strong>{config.oss_config || 'No seleccionado'}</strong><br/>
-                • Time Range: <strong>{config.trading_option.time_range_from} - {config.trading_option.time_range_to}</strong><br/>
-                • Order Close: <strong>{config.trading_option.order_types_to_close}</strong><br/>
+                • Rango: <strong>{config.trading_option.time_range_from} - {config.trading_option.time_range_to}</strong><br/>
+                • Cerrar Órdenes: <strong>{opciones.order_types_to_close.find(opt => opt.value === config.trading_option.order_types_to_close)?.label}</strong><br/>
                 • Técnicas: <strong>{Object.values(config.tecnicas).filter(t => t.enabled).length || 'Ninguna'}</strong>
               </div>
             </div>
@@ -1064,7 +1192,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 : !user 
                   ? '🔐 Inicia Sesión' 
                   : (!config.temporalidad || !config.direccion || !config.tipo_entrada)
-                    ? '❌ Completa Configuración'
+                    ? '❌ Completa: Temporalidad, Direcciones y Tipo de Entrada'
                     : `🚀 Generar ${preview.totalCombinaciones} Configuración${preview.totalCombinaciones !== 1 ? 'es' : ''}`
               }
             </button>
@@ -1078,7 +1206,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 fontSize: '12px',
                 textAlign: 'center'
               }}>
-                ⚠️ Completa: Temporalidad, Dirección y Tipo de Entrada
+                ⚠️ Completa: Temporalidad, Direcciones y Tipo de Entrada
               </div>
             )}
           </div>
