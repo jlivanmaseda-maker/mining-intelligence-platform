@@ -348,7 +348,7 @@ function App() {
           )}
         </div>
         {user ? (
-          <Dashboard user={user} />
+          <Dashboard user={user} supabase={supabase} />
         ) : (
           <div style={{
             display: 'flex',
