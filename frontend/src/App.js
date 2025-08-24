@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import MassiveGenerator from './components/MassiveGenerator';
+import Dashboard from './components/Dashboard';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -14,8 +15,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false); // NUEVO ESTADO
   const [authError, setAuthError] = useState(null);
-  const [deleting, setDeleting] = useState(null); // Para mostrar estado de eliminación
+  const [deleting, setDeleting] = useState(null);
 
   // Función para cargar todos los datos
   const loadAllData = async () => {
@@ -52,7 +54,7 @@ function App() {
     }
   };
 
-  // FUNCIÓN PARA ELIMINAR BOT INDIVIDUAL
+  // Función para eliminar bot individual
   const eliminarBot = async (botId, nombreBot) => {
     if (!window.confirm(`¿Estás seguro de que quieres eliminar el bot "${nombreBot}"?\n\nEsta acción no se puede deshacer.`)) {
       return;
@@ -64,14 +66,14 @@ function App() {
         .from('bot_configurations')
         .delete()
         .eq('id', botId)
-        .eq('user_id', user.id); // Seguridad adicional
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error eliminando bot:', error);
         alert('Error al eliminar el bot: ' + error.message);
       } else {
         alert('Bot eliminado exitosamente');
-        await loadAllData(); // Refrescar datos
+        await loadAllData();
       }
     } catch (error) {
       console.error('Error:', error);
@@ -81,7 +83,7 @@ function App() {
     }
   };
 
-  // FUNCIÓN PARA ELIMINAR TODOS LOS BOTS DE EJEMPLO
+  // Función para eliminar todos los bots
   const eliminarTodosLosBots = async () => {
     if (!window.confirm('¿Estás seguro de que quieres eliminar TODOS tus bots?\n\nEsta acción no se puede deshacer y eliminará todos los bots asociados a tu cuenta.')) {
       return;
@@ -160,6 +162,7 @@ function App() {
             setUserBots([]);
             setGlobalStats(null);
             setShowGenerator(false);
+            setShowDashboard(false); // RESETEAR DASHBOARD
             break;
           case 'TOKEN_REFRESHED':
             console.log('Token refrescado');
@@ -300,6 +303,85 @@ function App() {
     );
   }
 
+  // RENDERIZAR DASHBOARD SI ESTÁ ACTIVO
+  if (showDashboard) {
+    return (
+      <div>
+        <div style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          right: '20px', 
+          zIndex: 1000,
+          display: 'flex',
+          gap: '10px'
+        }}>
+          <button
+            onClick={() => setShowDashboard(false)}
+            style={{
+              padding: '10px 20px',
+              background: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            📊 Volver al Dashboard Principal
+          </button>
+          {user && (
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 20px',
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Cerrar Sesión
+            </button>
+          )}
+        </div>
+        {user ? (
+          <Dashboard user={user} />
+        ) : (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            fontSize: '18px',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <div>🔐 Debes iniciar sesión para acceder al Dashboard Analytics</div>
+            <button
+              onClick={handleLogin}
+              style={{
+                padding: '12px 24px',
+                background: '#24292e',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}
+            >
+              📱 Iniciar Sesión con GitHub
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // RENDERIZAR GENERADOR MASIVO SI ESTÁ ACTIVO
   if (showGenerator) {
     return (
       <div>
@@ -378,6 +460,7 @@ function App() {
     );
   }
 
+  // DASHBOARD PRINCIPAL
   return (
     <div style={{
       padding: '20px',
@@ -437,6 +520,24 @@ function App() {
               )}
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {/* BOTÓN DASHBOARD ANALYTICS - NUEVO */}
+              <button
+                onClick={() => setShowDashboard(true)}
+                style={{
+                  padding: '12px 24px',
+                  background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                }}
+              >
+                📊 Dashboard Analytics
+              </button>
+              
               <button
                 onClick={() => setShowGenerator(true)}
                 style={{
@@ -542,7 +643,6 @@ function App() {
             <h2 style={{ margin: 0, color: '#333' }}>
               👤 Tu Dashboard Personal
             </h2>
-            {/* BOTÓN PARA ELIMINAR TODOS LOS BOTS */}
             {userBots.length > 0 && (
               <button
                 onClick={eliminarTodosLosBots}
@@ -624,7 +724,6 @@ function App() {
                       }}>
                         {bot.estado}
                       </div>
-                      {/* BOTÓN ELIMINAR INDIVIDUAL */}
                       <button
                         onClick={() => eliminarBot(bot.id, bot.nombre_base)}
                         disabled={deleting === bot.id}
@@ -771,6 +870,39 @@ function App() {
         </h2>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+          {/* DASHBOARD ANALYTICS - NUEVO CARD */}
+          <div style={{ 
+            padding: '15px', 
+            background: user ? '#e8f5e8' : '#f8f9fa', 
+            borderRadius: '8px',
+            border: user ? '2px solid #28a745' : '1px solid #dee2e6'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', color: user ? '#28a745' : '#6c757d' }}>
+              📊 Dashboard Analytics {user ? '✅' : '🔒'}
+            </h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Métricas de performance, gráficos interactivos, análisis por técnicas y activos
+            </p>
+            {user && (
+              <button
+                onClick={() => setShowDashboard(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 16px',
+                  background: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Ver Analytics
+              </button>
+            )}
+          </div>
+
           <div style={{ 
             padding: '15px', 
             background: user ? '#e3f2fd' : '#f8f9fa', 
@@ -810,13 +942,6 @@ function App() {
             </p>
           </div>
           
-          <div style={{ padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>🧠 IA Recomendaciones</h4>
-            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-              Sugerencias basadas en patrones exitosos de la comunidad
-            </p>
-          </div>
-          
           <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>⚡ Sistema Real-time</h4>
             <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
@@ -843,7 +968,7 @@ function App() {
         </p>
         {user && (
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#28a745', fontWeight: 'bold' }}>
-            🎛️ Generador Masivo activado - Un solo bot con múltiples técnicas combinadas
+            🎛️ Generador Masivo + 📊 Dashboard Analytics - Un solo bot con múltiples técnicas combinadas
           </p>
         )}
       </footer>
