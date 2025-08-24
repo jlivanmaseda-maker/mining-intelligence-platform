@@ -1,634 +1,931 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import MassiveGenerator from './components/MassiveGenerator';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [globalStats, setGlobalStats] = useState(null);
-  const [userBots, setUserBots] = useState([]);
-  const [globalPatterns, setGlobalPatterns] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [showGenerator, setShowGenerator] = useState(false);
-
-  // Función para cargar todos los datos
-  const loadAllData = async () => {
-    try {
-      // Obtener estadísticas globales
-      const { data: patterns } = await supabase
-        .from('global_mining_patterns')
-        .select('*')
-        .order('indice_exito', { ascending: false })
-        .limit(10);
-
-      setGlobalPatterns(patterns || []);
-
-      // Si hay usuario, obtener sus bots
-      if (user) {
-        const { data: bots } = await supabase
-          .from('bot_configurations')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('fecha_creacion', { ascending: false });
-
-        setUserBots(bots || []);
-
-        // Calcular estadísticas del usuario
-        const userStats = {
-          total_bots: bots?.length || 0,
-          active_bots: bots?.filter(bot => bot.estado === 'Activo').length || 0,
-          generated_bots: bots?.filter(bot => bot.estado === 'Generado').length || 0
-        };
-        setGlobalStats(userStats);
-      } else {
-        setUserBots([]);
-        setGlobalStats(null);
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
+const MassiveGenerator = ({ user, onDataChange }) => {
+  const [config, setConfig] = useState({
+    nombre_base: 'Bot_Masivo',
+    activo: 'EURUSD', // Solo un activo seleccionado
+    temporalidad: '', // Solo una temporalidad
+    direccion: '', // Solo una dirección
+    tipo_entrada: '', // Solo un tipo de entrada
+    oss_config: '', // Solo una configuración OSS
+    apartador_trading: 'Sin Apartador', // Nueva opción
+    tecnicas: {
+      SPP: { enabled: false, min: 100, max: 1000 },
+      WFM: { enabled: false, min: 100, max: 800 },
+      'MC Trade': { enabled: false, min: 50, max: 500 },
+      'Retest MC': { enabled: false, min: 100, max: 300 }
+    },
+    parametros_avanzados: {
+      atr_periodo: 14, // Nuevo campo ATR Periodo
+      atr_multiple: 1.5, // Nuevo campo ATR Multiple
+      periodo_min: 2,
+      periodo_max: 100,
+      global_min: 2,
+      global_max: 130,
+      global_indicadores: 'Básicos' // Nuevo campo
+    },
+    horario: {
+      inicio: '14:00',
+      fin: '20:00'
     }
+  });
+
+  const [customActivo, setCustomActivo] = useState('');
+  const [showCustomActivo, setShowCustomActivo] = useState(false);
+  const [preview, setPreview] = useState({
+    totalCombinaciones: 0,
+    ejemplos: []
+  });
+  
+  const [generating, setGenerating] = useState(false);
+
+  // Opciones disponibles (selección única)
+  const opciones = {
+    temporalidades: ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'],
+    direcciones: ['Long', 'Short', 'Both'],
+    tipos_entrada: ['Market', 'Limit', 'Stop'],
+    oss_configs: ['Sin OSS', 'OSS Final', 'OSS Invertido', 'OSS Intermedio'],
+    apartador_trading: ['Sin Apartador', 'Apartador Básico', 'Apartador Avanzado', 'Apartador Personalizado'],
+    global_indicadores: ['Básicos', 'Avanzados', 'Profesionales', 'Personalizados'],
+    activos_predefinidos: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'GOLD', 'SILVER', 'OIL', 'BTC', 'ETH']
   };
 
+  // Función para calcular preview de combinaciones
   useEffect(() => {
-    // Función para obtener la sesión actual
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setLoading(false);
-    };
+    const calcularCombinaciones = () => {
+      // Solo contar técnicas habilitadas
+      const tecnicasEnabled = Object.values(config.tecnicas).filter(t => t.enabled);
+      const totalTecnicas = tecnicasEnabled.length || 1;
 
-    getSession();
+      // Con selección única, el total es igual al número de técnicas
+      const total = totalTecnicas;
 
-    // Escuchar cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event, session?.user?.email);
-        setUser(session?.user ?? null);
-        setLoading(false);
+      // Generar ejemplos de combinaciones
+      const ejemplos = [];
+      if (config.activo && config.temporalidad && config.direccion && config.tipo_entrada) {
+        const tecnicasHabilitadas = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
         
-        // Si hay login exitoso, limpiar URL y cargar datos
-        if (event === 'SIGNED_IN' && window.location.hash) {
-          window.history.replaceState(null, '', window.location.pathname);
+        if (tecnicasHabilitadas.length > 0) {
+          tecnicasHabilitadas.forEach((tecnica, index) => {
+            if (index < 5) { // Mostrar máximo 5 ejemplos
+              const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnica}_${config.oss_config || 'SinOSS'}`;
+              ejemplos.push(nombre);
+            }
+          });
+        } else {
+          // Si no hay técnicas seleccionadas, mostrar ejemplo básico
+          const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_SPP_${config.oss_config || 'SinOSS'}`;
+          ejemplos.push(nombre);
         }
       }
-    );
 
-    return () => subscription.unsubscribe();
-  }, []);
+      setPreview({
+        totalCombinaciones: total,
+        ejemplos: ejemplos
+      });
+    };
 
-  // Cargar datos cuando cambie el usuario
-  useEffect(() => {
-    if (!loading) {
-      loadAllData();
-    }
-  }, [user, loading]);
+    calcularCombinaciones();
+  }, [config]);
 
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: {
-        redirectTo: window.location.origin
+  // Manejar cambios en selección única
+  const handleSingleChange = (field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Manejar cambios en técnicas
+  const handleTecnicaChange = (tecnica, field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      tecnicas: {
+        ...prev.tecnicas,
+        [tecnica]: {
+          ...prev.tecnicas[tecnica],
+          [field]: field === 'enabled' ? value : parseFloat(value)
+        }
       }
-    });
-    if (error) {
-      console.error('Error logging in:', error);
-      alert('Error al iniciar sesión. Revisa la configuración de GitHub OAuth.');
+    }));
+  };
+
+  // Manejar cambios en parámetros avanzados
+  const handleParametroChange = (parametro, value) => {
+    setConfig(prev => ({
+      ...prev,
+      parametros_avanzados: {
+        ...prev.parametros_avanzados,
+        [parametro]: isNaN(parseFloat(value)) ? value : parseFloat(value)
+      }
+    }));
+  };
+
+  // Agregar activo personalizado
+  const agregarActivoPersonalizado = () => {
+    if (customActivo.trim() && !opciones.activos_predefinidos.includes(customActivo.toUpperCase())) {
+      setConfig(prev => ({ ...prev, activo: customActivo.toUpperCase() }));
+      setCustomActivo('');
+      setShowCustomActivo(false);
     }
   };
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error('Error logging out:', error);
-  };
-
-  const createSampleBot = async () => {
+  // Generar configuraciones
+  const generarConfiguraciones = async () => {
     if (!user) {
-      alert('Debes iniciar sesión primero');
+      alert('Debes iniciar sesión para generar configuraciones');
       return;
     }
 
-    setCreating(true);
-    try {
-      const sampleBot = {
-        user_id: user.id,
-        nombre_base: `Bot_Ejemplo_${Date.now()}`,
-        nombre_completo: `Bot_Ejemplo_EURUSD_M15_Long_Limit_SPP_${Date.now()}`,
-        magic_number: Math.floor(Math.random() * 10000) + 1000,
-        activo: 'EURUSD',
-        temporalidad: 'M15',
-        direccion: 'Long',
-        tipo_entrada: 'Limit',
-        oss_config: 'OSS Final',
-        tecnicas_simulaciones: { 'SPP': 500, 'WFM': 300 },
-        estado: 'Generado'
-      };
+    if (!config.temporalidad || !config.direccion || !config.tipo_entrada) {
+      alert('Por favor completa todas las configuraciones básicas');
+      return;
+    }
 
-      const { data, error } = await supabase
-        .from('bot_configurations')
-        .insert([sampleBot])
-        .select();
-
-      if (error) {
-        console.error('Error creando bot:', error);
-        alert('Error creando bot de ejemplo: ' + error.message);
-      } else {
-        alert('¡Bot de ejemplo creado exitosamente!');
-        // IMPORTANTE: Refrescar datos automáticamente
-        await loadAllData();
+    const tecnicasEnabled = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
+    if (tecnicasEnabled.length === 0) {
+      if (!window.confirm('No has seleccionado técnicas específicas. ¿Generar con configuración SPP por defecto?')) {
+        return;
       }
+    }
+
+    setGenerating(true);
+    try {
+      // Obtener próximo magic number base
+      const { data: maxMagic } = await supabase
+        .from('bot_configurations')
+        .select('magic_number')
+        .eq('user_id', user.id)
+        .order('magic_number', { ascending: false })
+        .limit(1);
+
+      let magicNumberBase = (maxMagic?.[0]?.magic_number || 1000) + 1;
+
+      // Generar configuraciones
+      const configuraciones = [];
+      const tecnicasToUse = tecnicasEnabled.length ? tecnicasEnabled : ['SPP'];
+      
+      for (const tecnica of tecnicasToUse) {
+        const tecnicaConfig = config.tecnicas[tecnica] || { min: 100, max: 500 };
+        const simulaciones = Math.floor(Math.random() * (tecnicaConfig.max - tecnicaConfig.min + 1)) + tecnicaConfig.min;
+        
+        const nombreCompleto = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnica}_${config.oss_config || 'SinOSS'}_${magicNumberBase}`;
+        
+        configuraciones.push({
+          user_id: user.id,
+          nombre_base: config.nombre_base,
+          nombre_completo: nombreCompleto,
+          magic_number: magicNumberBase++,
+          activo: config.activo,
+          temporalidad: config.temporalidad,
+          direccion: config.direccion,
+          tipo_entrada: config.tipo_entrada,
+          oss_config: config.oss_config || 'Sin OSS',
+          apartador_trading: config.apartador_trading,
+          tecnicas_simulaciones: { [tecnica]: simulaciones },
+          atr_periodo: config.parametros_avanzados.atr_periodo,
+          atr_multiple: config.parametros_avanzados.atr_multiple,
+          atr_min: 5, // Valor por defecto
+          atr_max: 20, // Valor por defecto
+          periodo_min: config.parametros_avanzados.periodo_min,
+          periodo_max: config.parametros_avanzados.periodo_max,
+          global_min: config.parametros_avanzados.global_min,
+          global_max: config.parametros_avanzados.global_max,
+          global_indicadores: config.parametros_avanzados.global_indicadores,
+          horario_inicio: config.horario.inicio,
+          horario_fin: config.horario.fin,
+          estado: 'Generado'
+        });
+      }
+
+      // Insertar configuraciones
+      const { error } = await supabase
+        .from('bot_configurations')
+        .insert(configuraciones);
+      
+      if (error) {
+        console.error('Error insertando configuraciones:', error);
+        throw error;
+      }
+
+      alert(`¡${configuraciones.length} configuración(es) creada(s) exitosamente!`);
+      
+      // Callback para refrescar datos en el dashboard principal
+      if (onDataChange) {
+        await onDataChange();
+      }
+
     } catch (error) {
-      console.error('Error:', error);
-      alert('Error inesperado: ' + error.message);
+      console.error('Error generando configuraciones:', error);
+      alert('Error generando configuraciones: ' + error.message);
     } finally {
-      setCreating(false);
+      setGenerating(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px'
-      }}>
-        🤖 Cargando Mining Intelligence Platform...
-      </div>
-    );
-  }
-
-  // Si se está mostrando el generador, renderizar solo eso
-  if (showGenerator) {
-    return (
-      <div>
-        {/* Botón para volver al dashboard */}
-        <div style={{ 
-          position: 'fixed', 
-          top: '20px', 
-          right: '20px', 
-          zIndex: 1000,
-          display: 'flex',
-          gap: '10px'
-        }}>
-          <button
-            onClick={() => setShowGenerator(false)}
-            style={{
-              padding: '10px 20px',
-              background: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            📊 Volver al Dashboard
-          </button>
-          {user && (
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '10px 20px',
-                background: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Cerrar Sesión
-            </button>
-          )}
-        </div>
-        <MassiveGenerator user={user} onDataChange={loadAllData} />
-      </div>
-    );
-  }
-
   return (
     <div style={{
-      padding: '20px',
-      maxWidth: '1200px',
-      margin: '0 auto',
-      fontFamily: 'Arial, sans-serif'
+      background: 'white',
+      padding: '30px',
+      borderRadius: '15px',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+      maxWidth: '1400px',
+      margin: '20px auto'
     }}>
-      {/* Header */}
       <header style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        padding: '30px',
-        borderRadius: '15px',
-        marginBottom: '30px',
-        textAlign: 'center'
+        textAlign: 'center',
+        marginBottom: '30px'
       }}>
-        <h1 style={{ margin: 0, fontSize: '2.5em' }}>
-          🤖 Mining Intelligence Platform
+        <h1 style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          margin: '0 0 20px 0',
+          padding: '20px',
+          borderRadius: '10px',
+          fontSize: '2em'
+        }}>
+          🎛️ Generador Masivo de Configuraciones
         </h1>
-        <p style={{ margin: '10px 0 0 0', fontSize: '1.2em', opacity: 0.9 }}>
-          Sistema de Inteligencia Colectiva para Trading Algorítmico
+        <p style={{ color: '#666', fontSize: '16px', lineHeight: '1.6' }}>
+          Crea múltiples configuraciones de bots usando checkboxes exclusivos, técnicas avanzadas SPP/WFM/MC Trade, 
+          y parámetros OSS optimizados. La evolución de tu sistema Streamlit en formato web.
         </p>
       </header>
 
-      {/* Authentication Status */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '30px',
-        padding: '20px',
-        background: user ? '#d4edda' : '#f8f9fa',
-        borderRadius: '10px',
-        border: user ? '2px solid #28a745' : '1px solid #dee2e6'
-      }}>
-        {user ? (
-          <>
-            <div>
-              <span style={{ fontSize: '16px', color: '#155724', fontWeight: 'bold' }}>
-                ✅ ¡Sistema Funcionando Perfectamente!
-              </span>
-              <div style={{ fontSize: '14px', color: '#155724', marginTop: '5px' }}>
-                Conectado como: <strong>{user.email}</strong>
-              </div>
-              {user.user_metadata?.avatar_url && (
-                <img 
-                  src={user.user_metadata.avatar_url} 
-                  alt="Avatar"
-                  style={{ 
-                    width: '32px', 
-                    height: '32px', 
-                    borderRadius: '50%', 
-                    marginLeft: '10px',
-                    verticalAlign: 'middle'
-                  }}
-                />
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowGenerator(true)}
-                style={{
-                  padding: '12px 24px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                }}
-              >
-                🎛️ Generador Masivo
-              </button>
-              <button
-                onClick={createSampleBot}
-                disabled={creating}
-                style={{
-                  padding: '10px 20px',
-                  background: creating ? '#6c757d' : '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: creating ? 'not-allowed' : 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                {creating ? '⏳ Creando...' : '🤖 Crear Bot Ejemplo'}
-              </button>
-              <button
-                onClick={handleLogout}
-                style={{
-                  padding: '10px 20px',
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Cerrar Sesión
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <span style={{ fontSize: '16px', color: '#6c757d' }}>
-                🔐 Inicia sesión para acceder a todas las funcionalidades
-              </span>
-              <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
-                Usa tu cuenta GitHub para autenticarte de forma segura
-              </div>
-            </div>
-            <button
-              onClick={handleLogin}
-              style={{
-                padding: '12px 24px',
-                background: '#24292e',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <span>📱</span>
-              Iniciar Sesión con GitHub
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Dashboard Personal (si hay usuario) */}
-      {user && (
-        <div style={{
-          background: 'white',
-          padding: '25px',
-          borderRadius: '15px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-          marginBottom: '30px'
-        }}>
-          <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
-            👤 Tu Dashboard Personal
-          </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
+        
+        {/* Panel de Configuración */}
+        <div>
           
-          {/* Estadísticas Personales */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '20px' }}>
-            <div style={{ textAlign: 'center', padding: '15px', background: '#e8f4fd', borderRadius: '10px' }}>
-              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#007bff' }}>
-                {globalStats?.total_bots || 0}
-              </div>
-              <div style={{ color: '#666', fontSize: '14px' }}>Total Bots</div>
+          {/* Configuración Básica */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#f8f9fa', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>⚙️ Configuración Básica</h3>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Nombre Base:
+              </label>
+              <input
+                type="text"
+                value={config.nombre_base}
+                onChange={(e) => handleSingleChange('nombre_base', e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '5px',
+                  fontSize: '14px'
+                }}
+                placeholder="Bot_Masivo"
+              />
             </div>
-            <div style={{ textAlign: 'center', padding: '15px', background: '#d4edda', borderRadius: '10px' }}>
-              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#28a745' }}>
-                {globalStats?.generated_bots || 0}
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+                Activo (Selección única):
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                {opciones.activos_predefinidos.map(activo => (
+                  <label key={activo} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '5px',
+                    padding: '8px',
+                    background: config.activo === activo ? '#007bff' : 'white',
+                    color: config.activo === activo ? 'white' : '#333',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    border: '2px solid #007bff',
+                    justifyContent: 'center'
+                  }}>
+                    <input
+                      type="radio"
+                      name="activo"
+                      value={activo}
+                      checked={config.activo === activo}
+                      onChange={(e) => handleSingleChange('activo', e.target.value)}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{activo}</span>
+                  </label>
+                ))}
               </div>
-              <div style={{ color: '#666', fontSize: '14px' }}>Bots Generados</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '15px', background: '#fff3cd', borderRadius: '10px' }}>
-              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#856404' }}>
-                {globalStats?.active_bots || 0}
+              
+              {/* Opción para agregar activo personalizado */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowCustomActivo(!showCustomActivo)}
+                  style={{
+                    padding: '8px 15px',
+                    background: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  + Agregar Activo
+                </button>
+                {showCustomActivo && (
+                  <>
+                    <input
+                      type="text"
+                      value={customActivo}
+                      onChange={(e) => setCustomActivo(e.target.value.toUpperCase())}
+                      placeholder="BTCUSD"
+                      style={{
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '12px',
+                        width: '100px'
+                      }}
+                    />
+                    <button
+                      onClick={agregarActivoPersonalizado}
+                      disabled={!customActivo.trim()}
+                      style={{
+                        padding: '8px 12px',
+                        background: customActivo.trim() ? '#007bff' : '#6c757d',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: customActivo.trim() ? 'pointer' : 'not-allowed',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ✓
+                    </button>
+                  </>
+                )}
               </div>
-              <div style={{ color: '#666', fontSize: '14px' }}>Bots Activos</div>
+              
+              {/* Mostrar activo personalizado actual si no está en predefinidos */}
+              {!opciones.activos_predefinidos.includes(config.activo) && config.activo && (
+                <div style={{ 
+                  marginTop: '10px', 
+                  padding: '8px 12px', 
+                  background: '#e3f2fd', 
+                  borderRadius: '5px',
+                  fontSize: '12px',
+                  color: '#1976d2'
+                }}>
+                  Activo personalizado seleccionado: <strong>{config.activo}</strong>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Lista de Bots */}
-          {userBots.length > 0 ? (
-            <div>
-              <h3 style={{ margin: '20px 0 15px 0', color: '#333' }}>🤖 Tus Bots Creados</h3>
-              <div style={{ display: 'grid', gap: '10px' }}>
-                {userBots.slice(0, 5).map((bot) => (
-                  <div key={bot.id} style={{
-                    padding: '15px',
-                    background: '#f8f9fa',
-                    borderRadius: '8px',
-                    borderLeft: '4px solid #007bff',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 5px 0', color: '#333' }}>
-                        {bot.nombre_base}
-                      </h4>
-                      <p style={{ margin: '0', fontSize: '14px', color: '#666' }}>
-                        {bot.activo} - {bot.temporalidad} - {bot.direccion} - {bot.tipo_entrada}
-                        {bot.oss_config !== 'Sin OSS' && ` - ${bot.oss_config}`}
-                      </p>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
-                        Magic Number: {bot.magic_number} | Estado: {bot.estado}
-                      </p>
-                    </div>
-                    <div style={{
-                      padding: '5px 10px',
-                      background: bot.estado === 'Activo' ? '#d4edda' : '#fff3cd',
-                      color: bot.estado === 'Activo' ? '#155724' : '#856404',
-                      borderRadius: '15px',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
-                    }}>
-                      {bot.estado}
-                    </div>
-                  </div>
-                ))}
-                {userBots.length > 5 && (
-                  <div style={{ textAlign: 'center', padding: '10px', color: '#666' }}>
-                    ... y {userBots.length - 5} bots más
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '40px',
-              background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-              borderRadius: '15px'
-            }}>
-              <h3 style={{ color: '#333', marginBottom: '15px' }}>
-                🚀 ¡Comienza Creando tu Primer Bot!
-              </h3>
-              <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
-                Usa el botón <strong>"Crear Bot Ejemplo"</strong> para probar el sistema, o 
-                el <strong>"Generador Masivo"</strong> para crear múltiples configuraciones avanzadas. 
-              </p>
-              <div style={{
-                background: 'rgba(255,255,255,0.8)',
-                padding: '15px',
-                borderRadius: '10px',
-                marginTop: '15px'
-              }}>
-                <p style={{ margin: '0 0 10px 0', color: '#1976d2', fontWeight: 'bold' }}>
-                  🎛️ Generador Masivo Disponible
-                </p>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-                  Checkboxes exclusivos, técnicas SPP/WFM/MC Trade, configuración OSS, 
-                  generación de hasta 1000+ configuraciones únicas.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Dashboard Global */}
-      <div style={{
-        background: 'white',
-        padding: '25px',
-        borderRadius: '15px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        marginBottom: '30px'
-      }}>
-        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
-          📊 Estadísticas Globales de la Comunidad
-        </h2>
-        
-        {globalPatterns && globalPatterns.length > 0 ? (
-          <div>
-            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>🔍 Patrones Exitosos Identificados</h3>
-            <div style={{ display: 'grid', gap: '15px' }}>
-              {globalPatterns.map((pattern, index) => (
-                <div key={index} style={{
-                  padding: '15px',
-                  background: '#f8f9fa',
-                  borderRadius: '8px',
-                  borderLeft: '4px solid #28a745'
+          {/* Temporalidades - Selección única */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e3f2fd', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#1976d2' }}>⏰ Temporalidad (Selección única)</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '10px' }}>
+              {opciones.temporalidades.map(temp => (
+                <label key={temp} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  padding: '8px',
+                  background: config.temporalidad === temp ? '#1976d2' : 'white',
+                  color: config.temporalidad === temp ? 'white' : '#333',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  border: '2px solid #1976d2',
+                  justifyContent: 'center'
                 }}>
-                  <h4 style={{ margin: '0 0 10px 0' }}>
-                    {pattern.activo} - {pattern.temporalidad} - {pattern.direccion}
-                  </h4>
-                  <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                    <strong>Tipo Entrada:</strong> {pattern.tipo_entrada} | 
-                    <strong> OSS:</strong> {pattern.oss_config}
-                  </p>
-                  <p style={{ margin: '5px 0', fontSize: '14px', color: '#28a745' }}>
-                    <strong>Índice de Éxito:</strong> {pattern.indice_exito}% 
-                    <span style={{ color: '#666' }}>
-                      ({pattern.total_bots_evaluados} evaluaciones)
-                    </span>
-                  </p>
-                </div>
+                  <input
+                    type="radio"
+                    name="temporalidad"
+                    value={temp}
+                    checked={config.temporalidad === temp}
+                    onChange={(e) => handleSingleChange('temporalidad', e.target.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{temp}</span>
+                </label>
               ))}
             </div>
           </div>
-        ) : (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-            borderRadius: '15px'
-          }}>
-            <h3 style={{ color: '#333', marginBottom: '15px' }}>
-              🎯 Tu "Wikipedia del Trading Algorítmico" Está Lista
-            </h3>
-            <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
-              Los patrones exitosos de la comunidad aparecerán aquí cuando los usuarios evalúen sus estrategias.
-              ¡Sé el primero en contribuir!
-            </p>
-            {user && (
-              <div style={{
-                background: 'rgba(102, 126, 234, 0.1)',
-                padding: '20px',
-                borderRadius: '10px',
-                marginTop: '20px'
+
+          {/* Direcciones - Selección única */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>📈 Dirección de Trading (Selección única)</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              {opciones.direcciones.map(dir => (
+                <label key={dir} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  padding: '12px',
+                  background: config.direccion === dir ? '#7b1fa2' : 'white',
+                  color: config.direccion === dir ? 'white' : '#333',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid #7b1fa2',
+                  justifyContent: 'center',
+                  fontWeight: 'bold'
+                }}>
+                  <input
+                    type="radio"
+                    name="direccion"
+                    value={dir}
+                    checked={config.direccion === dir}
+                    onChange={(e) => handleSingleChange('direccion', e.target.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <span>{dir === 'Long' ? '📈 Long' : dir === 'Short' ? '📉 Short' : '🔄 Both'}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Tipos de Entrada - Selección única */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🎯 Tipo de Entrada (Selección única)</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              {opciones.tipos_entrada.map(tipo => (
+                <label key={tipo} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  padding: '12px',
+                  background: config.tipo_entrada === tipo ? '#388e3c' : 'white',
+                  color: config.tipo_entrada === tipo ? 'white' : '#333',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid #388e3c',
+                  justifyContent: 'center',
+                  fontWeight: 'bold'
+                }}>
+                  <input
+                    type="radio"
+                    name="tipo_entrada"
+                    value={tipo}
+                    checked={config.tipo_entrada === tipo}
+                    onChange={(e) => handleSingleChange('tipo_entrada', e.target.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <span>{tipo}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* OSS - Selección única */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#fff3e0', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#f57c00' }}>🔧 Configuración OSS (Selección única)</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              {opciones.oss_configs.map(oss => (
+                <label key={oss} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  padding: '12px',
+                  background: config.oss_config === oss ? '#f57c00' : 'white',
+                  color: config.oss_config === oss ? 'white' : '#333',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid #f57c00',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}>
+                  <input
+                    type="radio"
+                    name="oss_config"
+                    value={oss}
+                    checked={config.oss_config === oss}
+                    onChange={(e) => handleSingleChange('oss_config', e.target.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <span>{oss}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Apartador de Trading Option */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Apartador de Trading Option</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              {opciones.apartador_trading.map(apartador => (
+                <label key={apartador} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  padding: '12px',
+                  background: config.apartador_trading === apartador ? '#0277bd' : 'white',
+                  color: config.apartador_trading === apartador ? 'white' : '#333',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid #0277bd',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}>
+                  <input
+                    type="radio"
+                    name="apartador_trading"
+                    value={apartador}
+                    checked={config.apartador_trading === apartador}
+                    onChange={(e) => handleSingleChange('apartador_trading', e.target.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <span>{apartador}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Técnicas Avanzadas (múltiples permitidas) */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
+            {Object.keys(config.tecnicas).map(tecnica => (
+              <div key={tecnica} style={{ 
+                marginBottom: '15px', 
+                padding: '15px', 
+                background: config.tecnicas[tecnica].enabled ? '#c2185b' : 'white',
+                color: config.tecnicas[tecnica].enabled ? 'white' : '#333',
+                borderRadius: '8px',
+                border: '2px solid #c2185b'
               }}>
-                <p style={{ margin: '0 0 10px 0', color: '#667eea', fontWeight: 'bold' }}>
-                  🎛️ Genera Múltiples Configuraciones
-                </p>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-                  Usa el Generador Masivo para crear cientos de configuraciones con 
-                  checkboxes exclusivos y técnicas avanzadas. Contribuye a la inteligencia colectiva.
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={config.tecnicas[tecnica].enabled}
+                      onChange={(e) => handleTecnicaChange(tecnica, 'enabled', e.target.checked)}
+                    />
+                    <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{tecnica}</span>
+                  </label>
+                </div>
+                
+                {config.tecnicas[tecnica].enabled && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                        Simulaciones Mín:
+                      </label>
+                      <input
+                        type="number"
+                        value={config.tecnicas[tecnica].min}
+                        onChange={(e) => handleTecnicaChange(tecnica, 'min', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '5px',
+                          border: '1px solid rgba(255,255,255,0.3)',
+                          borderRadius: '3px',
+                          background: 'rgba(255,255,255,0.2)',
+                          color: 'white'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                        Simulaciones Máx:
+                      </label>
+                      <input
+                        type="number"
+                        value={config.tecnicas[tecnica].max}
+                        onChange={(e) => handleTecnicaChange(tecnica, 'max', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '5px',
+                          border: '1px solid rgba(255,255,255,0.3)',
+                          borderRadius: '3px',
+                          background: 'rgba(255,255,255,0.2)',
+                          color: 'white'
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Parámetros Avanzados */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+              
+              {/* ATR Periodo */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  ATR Período:
+                </label>
+                <input
+                  type="number"
+                  value={config.parametros_avanzados.atr_periodo}
+                  onChange={(e) => handleParametroChange('atr_periodo', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                  min="1"
+                  max="50"
+                />
+              </div>
+
+              {/* ATR Multiple */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  ATR Multiple:
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={config.parametros_avanzados.atr_multiple}
+                  onChange={(e) => handleParametroChange('atr_multiple', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                  min="0.1"
+                  max="5.0"
+                />
+              </div>
+
+              {/* Período Mín */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Período Mín:
+                </label>
+                <input
+                  type="number"
+                  value={config.parametros_avanzados.periodo_min}
+                  onChange={(e) => handleParametroChange('periodo_min', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Período Máx */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Período Máx:
+                </label>
+                <input
+                  type="number"
+                  value={config.parametros_avanzados.periodo_max}
+                  onChange={(e) => handleParametroChange('periodo_max', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Global Mín */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Global Mín:
+                </label>
+                <input
+                  type="number"
+                  value={config.parametros_avanzados.global_min}
+                  onChange={(e) => handleParametroChange('global_min', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              {/* Global Máx */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Global Máx:
+                </label>
+                <input
+                  type="number"
+                  value={config.parametros_avanzados.global_max}
+                  onChange={(e) => handleParametroChange('global_max', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Global Indicadores */}
+            <div style={{ marginTop: '15px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                Global Indicadores:
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                {opciones.global_indicadores.map(indicador => (
+                  <label key={indicador} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '5px',
+                    padding: '10px',
+                    background: config.parametros_avanzados.global_indicadores === indicador ? '#7b1fa2' : 'white',
+                    color: config.parametros_avanzados.global_indicadores === indicador ? 'white' : '#333',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    border: '2px solid #7b1fa2',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}>
+                    <input
+                      type="radio"
+                      name="global_indicadores"
+                      value={indicador}
+                      checked={config.parametros_avanzados.global_indicadores === indicador}
+                      onChange={(e) => handleParametroChange('global_indicadores', e.target.value)}
+                      style={{ display: 'none' }}
+                    />
+                    <span>{indicador}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Horario de Trading */}
+          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🕐 Horario de Trading</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Hora Inicio:
+                </label>
+                <input
+                  type="time"
+                  value={config.horario.inicio}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    horario: { ...prev.horario, inicio: e.target.value }
+                  }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Hora Fin:
+                </label>
+                <input
+                  type="time"
+                  value={config.horario.fin}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    horario: { ...prev.horario, fin: e.target.value }
+                  }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Panel de Preview y Generación */}
+        <div>
+          
+          {/* Preview de Combinaciones */}
+          <div style={{
+            position: 'sticky',
+            top: '20px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            padding: '25px',
+            borderRadius: '15px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0' }}>📊 Preview de Generación</h3>
+            
+            <div style={{ 
+              background: 'rgba(255,255,255,0.2)', 
+              padding: '15px', 
+              borderRadius: '10px',
+              marginBottom: '15px'
+            }}>
+              <div style={{ fontSize: '2.5em', fontWeight: 'bold', textAlign: 'center' }}>
+                {preview.totalCombinaciones}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '14px', opacity: 0.9 }}>
+                Configuración(es) a generar
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Configuración:</strong>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '5px' }}>
+                • Activo: <strong>{config.activo}</strong><br/>
+                • Temporalidad: <strong>{config.temporalidad || 'No seleccionada'}</strong><br/>
+                • Dirección: <strong>{config.direccion || 'No seleccionada'}</strong><br/>
+                • Tipo Entrada: <strong>{config.tipo_entrada || 'No seleccionado'}</strong><br/>
+                • OSS: <strong>{config.oss_config || 'No seleccionado'}</strong><br/>
+                • Apartador: <strong>{config.apartador_trading}</strong><br/>
+                • Técnicas: <strong>{Object.values(config.tecnicas).filter(t => t.enabled).length || 'Ninguna'}</strong>
+              </div>
+            </div>
+
+            {preview.ejemplos.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <strong>Ejemplos:</strong>
+                <div style={{ 
+                  background: 'rgba(0,0,0,0.2)', 
+                  padding: '10px', 
+                  borderRadius: '5px',
+                  marginTop: '5px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}>
+                  {preview.ejemplos.map((ejemplo, index) => (
+                    <div key={index}>{ejemplo}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={generarConfiguraciones}
+              disabled={generating || !config.temporalidad || !config.direccion || !config.tipo_entrada || !user}
+              style={{
+                width: '100%',
+                padding: '15px',
+                background: generating ? '#6c757d' : (!config.temporalidad || !config.direccion || !config.tipo_entrada || !user) ? '#dc3545' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: generating || !config.temporalidad || !config.direccion || !config.tipo_entrada || !user ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {generating 
+                ? '⏳ Generando...' 
+                : !user 
+                  ? '🔐 Inicia Sesión' 
+                  : (!config.temporalidad || !config.direccion || !config.tipo_entrada)
+                    ? '❌ Completa Configuración'
+                    : `🚀 Generar ${preview.totalCombinaciones} Configuración${preview.totalCombinaciones !== 1 ? 'es' : ''}`
+              }
+            </button>
+
+            {(!config.temporalidad || !config.direccion || !config.tipo_entrada) && (
+              <div style={{
+                marginTop: '10px',
+                padding: '10px',
+                background: 'rgba(255,193,7,0.3)',
+                borderRadius: '5px',
+                fontSize: '12px',
+                textAlign: 'center'
+              }}>
+                ⚠️ Completa: Temporalidad, Dirección y Tipo de Entrada
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Funcionalidades del Sistema */}
-      <div style={{
-        background: 'white',
-        padding: '25px',
-        borderRadius: '15px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-      }}>
-        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
-          🚀 Tu Plataforma de Inteligencia Colectiva
-        </h2>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-          <div style={{ 
-            padding: '15px', 
-            background: user ? '#e3f2fd' : '#f8f9fa', 
-            borderRadius: '8px',
-            border: user ? '2px solid #1976d2' : '1px solid #dee2e6'
-          }}>
-            <h4 style={{ margin: '0 0 10px 0', color: user ? '#1976d2' : '#6c757d' }}>
-              🎛️ Generador Masivo {user ? '✅' : '🔒'}
-            </h4>
-            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-              Checkboxes exclusivos, técnicas SPP/WFM/MC Trade, configuración OSS
-            </p>
-            {user && (
-              <button
-                onClick={() => setShowGenerator(true)}
-                style={{
-                  marginTop: '10px',
-                  padding: '8px 16px',
-                  background: '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}
-              >
-                Abrir Generador
-              </button>
-            )}
-          </div>
-          
-          <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>📊 Dashboard Global</h4>
-            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-              Comparación personal vs global, benchmarking automático
-            </p>
-          </div>
-          
-          <div style={{ padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>🧠 IA Recomendaciones</h4>
-            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-              Sugerencias basadas en patrones exitosos de la comunidad
-            </p>
-          </div>
-          
-          <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>⚡ Sistema Real-time</h4>
-            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-              Updates automáticos de estadísticas y nuevos insights
-            </p>
-          </div>
         </div>
-      </div>
 
-      {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '30px 20px',
-        color: '#666',
-        borderTop: '1px solid #eee',
-        marginTop: '40px'
-      }}>
-        <p style={{ margin: 0 }}>
-          🤖 <strong>Mining Intelligence Platform</strong> - 
-          La primera plataforma colaborativa para encontrar las mejores estrategias de trading algorítmico
-        </p>
-        <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
-          ✅ Sistema funcionando: Supabase + React + GitHub OAuth + Netlify - {user ? 'Autenticado' : 'Listo para autenticar'}
-        </p>
-        {user && (
-          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#28a745', fontWeight: 'bold' }}>
-            🎛️ Generador Masivo activado - Crea cientos de configuraciones con checkboxes exclusivos
-          </p>
-        )}
-      </footer>
+      </div>
     </div>
   );
-}
+};
 
-export default App;
+export default MassiveGenerator;
