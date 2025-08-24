@@ -42,14 +42,10 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     },
     parametros_avanzados: {
       atr_based: false,
-      atr_multiple: { min: 1.5, max: 3.0 },
-      atr_periodo: { min: 14, max: 20 },
-      periodo_min: 2,
-      periodo_max: 100,
-      global_min: 2,
-      global_max: 130,
-      global_indicadores: { min: 1, max: 5 },
-      spread_minado: 1.0 // VALOR ÚNICO
+      atr_periodo: { min: 14, max: 20 }, // CORREGIDO: Solo ATR Period
+      atr_multiplicador: { min: 1.5, max: 3.0 }, // CORREGIDO: Renombrado de atr_multiple
+      global_indicador: { min: 5, max: 200 }, // CORREGIDO: Como en la imagen
+      spread_minado: 1.0 // CORREGIDO: Solo un valor
     }
   });
 
@@ -147,7 +143,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }));
   };
 
-  // Manejar cambios en parámetros avanzados
+  // Manejar cambios en parámetros avanzados - CORREGIDO
   const handleParametroChange = (parametro, value) => {
     setConfig(prev => ({
       ...prev,
@@ -158,7 +154,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }));
   };
 
-  // Manejar cambios en rangos de parámetros avanzados
+  // Manejar cambios en rangos de parámetros avanzados - CORREGIDO
   const handleRangeChange = (parametro, tipo, value) => {
     setConfig(prev => ({
       ...prev,
@@ -181,7 +177,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }
   };
 
-  // Generar configuraciones
+  // Generar configuraciones - CORREGIDO
   const generarConfiguraciones = async () => {
     if (!user) {
       alert('Debes iniciar sesión para generar configuraciones');
@@ -248,17 +244,14 @@ const MassiveGenerator = ({ user, onDataChange }) => {
         tecnicas_simulaciones: tecnicasCombinadas,
         total_simulaciones: totalSimulaciones,
         atr_based: config.parametros_avanzados.atr_based,
-        atr_multiple_min: config.parametros_avanzados.atr_multiple.min,
-        atr_multiple_max: config.parametros_avanzados.atr_multiple.max,
+        // CORREGIDOS: Nuevos campos
         atr_periodo_min: config.parametros_avanzados.atr_periodo.min,
         atr_periodo_max: config.parametros_avanzados.atr_periodo.max,
-        periodo_min: config.parametros_avanzados.periodo_min,
-        periodo_max: config.parametros_avanzados.periodo_max,
-        global_min: config.parametros_avanzados.global_min,
-        global_max: config.parametros_avanzados.global_max,
-        global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
-        global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
-        spread_minado: config.parametros_avanzados.spread_minado, // VALOR ÚNICO
+        atr_multiplicador_min: config.parametros_avanzados.atr_multiplicador.min,
+        atr_multiplicador_max: config.parametros_avanzados.atr_multiplicador.max,
+        global_indicador_min: config.parametros_avanzados.global_indicador.min,
+        global_indicador_max: config.parametros_avanzados.global_indicador.max,
+        spread_minado: config.parametros_avanzados.spread_minado,
         estado: 'Generado'
       };
 
@@ -714,7 +707,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Trading Option - EN ESPAÑOL */}
+          {/* Trading Option */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Opciones de Trading</h3>
             
@@ -804,7 +797,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Técnicas Avanzadas - CON MC LENTO SPREAD */}
+          {/* Técnicas Avanzadas */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
             <p style={{ fontSize: '14px', color: '#666', marginBottom: '15px' }}>
@@ -871,7 +864,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                       </div>
                     </div>
                     
-                    {/* CAMPOS SPREAD PARA MC LENTO */}
                     {tecnica === 'MC Lento' && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
                         <div>
@@ -920,10 +912,11 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             ))}
           </div>
 
-          {/* Parámetros Avanzados - CON SPREAD ÚNICO */}
+          {/* Parámetros Avanzados - COMPLETAMENTE CORREGIDO */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
             
+            {/* ATR-based Checkbox */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
@@ -936,111 +929,179 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </label>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+            {/* SOLO LOS 4 CAMPOS NECESARIOS */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
               
-              {/* ATR Multiple - Rango */}
+              {/* ATR Período - Min/Max */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                  ATR Multiple:
+                  ATR Período:
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.atr_multiple.min}
-                      onChange={(e) => handleRangeChange('atr_multiple', 'min', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Mín:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        value={config.parametros_avanzados.atr_periodo.min}
+                        onChange={(e) => handleRangeChange('atr_periodo', 'min', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="1"
+                        max="100"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
                     </div>
                   </div>
                   <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.atr_multiple.max}
-                      onChange={(e) => handleRangeChange('atr_multiple', 'max', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Máx:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        value={config.parametros_avanzados.atr_periodo.max}
+                        onChange={(e) => handleRangeChange('atr_periodo', 'max', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="1"
+                        max="100"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-                  Mín: {config.parametros_avanzados.atr_multiple.min} - Máx: {config.parametros_avanzados.atr_multiple.max}
                 </div>
               </div>
 
-              {/* ATR Period - Rango */}
+              {/* ATR Multiplicador - Min/Max */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                  ATR Period:
+                  ATR Multiplicador:
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
-                    <input
-                      type="number"
-                      value={config.parametros_avanzados.atr_periodo.min}
-                      onChange={(e) => handleRangeChange('atr_periodo', 'min', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="1"
-                      max="100"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Mín:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={config.parametros_avanzados.atr_multiplicador.min}
+                        onChange={(e) => handleRangeChange('atr_multiplicador', 'min', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="0.1"
+                        max="10.0"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
                     </div>
                   </div>
                   <div>
-                    <input
-                      type="number"
-                      value={config.parametros_avanzados.atr_periodo.max}
-                      onChange={(e) => handleRangeChange('atr_periodo', 'max', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="1"
-                      max="100"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Máx:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={config.parametros_avanzados.atr_multiplicador.max}
+                        onChange={(e) => handleRangeChange('atr_multiplicador', 'max', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="0.1"
+                        max="10.0"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-                  Mín: {config.parametros_avanzados.atr_periodo.min} - Máx: {config.parametros_avanzados.atr_periodo.max}
+              </div>
+
+              {/* Global Indicador - Min/Max (como en la imagen) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                  Global Indicador:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Mín:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        value={config.parametros_avanzados.global_indicador.min}
+                        onChange={(e) => handleRangeChange('global_indicador', 'min', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="1"
+                        max="500"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Máx:</label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        value={config.parametros_avanzados.global_indicador.max}
+                        onChange={(e) => handleRangeChange('global_indicador', 'max', e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '5px',
+                          border: '1px solid #ddd',
+                          borderRadius: '5px',
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                        min="1"
+                        max="500"
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                        <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1049,151 +1110,39 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
                   Spread de Minado:
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={config.parametros_avanzados.spread_minado}
-                  onChange={(e) => handleParametroChange('spread_minado', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                  min="0.1"
-                  max="10.0"
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                  <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                  <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                <div style={{ display: 'flex', alignItems: 'center', maxWidth: '120px' }}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={config.parametros_avanzados.spread_minado}
+                    onChange={(e) => handleParametroChange('spread_minado', e.target.value)}
+                    style={{
+                      width: '80px',
+                      padding: '5px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px',
+                      fontSize: '14px',
+                      textAlign: 'center'
+                    }}
+                    min="0.1"
+                    max="10.0"
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '5px' }}>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▲</button>
+                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1' }}>▼</button>
+                  </div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                   Valor: {config.parametros_avanzados.spread_minado}
                 </div>
               </div>
 
-              {/* Otros parámetros simples */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Período Mín:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.periodo_min}
-                  onChange={(e) => handleParametroChange('periodo_min', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Período Máx:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.periodo_max}
-                  onChange={(e) => handleParametroChange('periodo_max', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Global Mín:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.global_min}
-                  onChange={(e) => handleParametroChange('global_min', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Global Máx:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.global_max}
-                  onChange={(e) => handleParametroChange('global_max', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Global Indicadores - Rango */}
-            <div style={{ marginTop: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                Global Indicadores (Rango):
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', maxWidth: '400px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Mínimo:</label>
-                  <input
-                    type="number"
-                    value={config.parametros_avanzados.global_indicadores.min}
-                    onChange={(e) => handleRangeChange('global_indicadores', 'min', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                    min="1"
-                    max="10"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Máximo:</label>
-                  <input
-                    type="number"
-                    value={config.parametros_avanzados.global_indicadores.max}
-                    onChange={(e) => handleRangeChange('global_indicadores', 'max', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                    min="1"
-                    max="10"
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
         </div>
 
-        {/* Panel de Preview y Generación - COMPLETO */}
+        {/* Panel de Preview y Generación - ACTUALIZADO */}
         <div>
           <div style={{
             position: 'sticky',
@@ -1238,8 +1187,10 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 • <strong>Trading Range:</strong> {config.trading_option.time_range_from} - {config.trading_option.time_range_to}<br/>
                 • <strong>Cerrar Órdenes:</strong> {opciones.order_types_to_close.find(opt => opt.value === config.trading_option.order_types_to_close)?.label}<br/>
                 
-                {/* PARÁMETROS AVANZADOS */}
-                • <strong>ATR Multiple:</strong> {config.parametros_avanzados.atr_multiple.min} - {config.parametros_avanzados.atr_multiple.max}<br/>
+                {/* PARÁMETROS AVANZADOS CORREGIDOS */}
+                • <strong>ATR Período:</strong> {config.parametros_avanzados.atr_periodo.min} - {config.parametros_avanzados.atr_periodo.max}<br/>
+                • <strong>ATR Multiplicador:</strong> {config.parametros_avanzados.atr_multiplicador.min} - {config.parametros_avanzados.atr_multiplicador.max}<br/>
+                • <strong>Global Indicador:</strong> {config.parametros_avanzados.global_indicador.min} - {config.parametros_avanzados.global_indicador.max}<br/>
                 • <strong>Spread Minado:</strong> {config.parametros_avanzados.spread_minado}<br/>
                 
                 {/* TÉCNICAS */}
