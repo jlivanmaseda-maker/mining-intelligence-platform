@@ -1,8 +1,9 @@
-@"
+# Crear el archivo netlify.toml correcto
+$netlifyContent = @"
 [build]
-  base = "frontend"
-  publish = "build"
   command = "npm run build"
+  publish = "build"
+  base = "frontend"
 
 [build.environment]
   NODE_VERSION = "18"
@@ -21,6 +22,8 @@
 [context.production.environment]
   REACT_APP_API_URL = "https://your-backend-url.onrender.com"
 
-[context.deploy-preview.environment]  
+[context.deploy-preview.environment]
   REACT_APP_API_URL = "https://your-backend-staging-url.onrender.com"
-"@ | Out-File -FilePath "netlify.toml" -Encoding utf8
+"@
+
+$netlifyContent | Out-File -FilePath "netlify.toml" -Encoding utf8
