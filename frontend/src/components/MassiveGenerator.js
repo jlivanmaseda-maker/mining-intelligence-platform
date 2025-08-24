@@ -30,9 +30,15 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       SPP: { enabled: false, min: 100, max: 1000 },
       WFM: { enabled: false, min: 100, max: 800 },
       'MC Trade': { enabled: false, min: 50, max: 500 },
-      'MC Lento': { enabled: false, min: 100, max: 300 },
-      'Secuencial': { enabled: false, min: 50, max: 200 }, // NUEVA TÉCNICA
-      'High Back Test Precision': { enabled: false, min: 200, max: 800 } // NUEVA TÉCNICA
+      'MC Lento': { 
+        enabled: false, 
+        min: 100, 
+        max: 300,
+        spread_min: 1.0,  // NUEVO CAMPO
+        spread_max: 3.0   // NUEVO CAMPO
+      },
+      'Secuencial': { enabled: false, min: 50, max: 200 },
+      'High Back Test Precision': { enabled: false, min: 200, max: 800 }
     },
     parametros_avanzados: {
       atr_based: false,
@@ -42,7 +48,8 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       periodo_max: 100,
       global_min: 2,
       global_max: 130,
-      global_indicadores: { min: 1, max: 5 }
+      global_indicadores: { min: 1, max: 5 },
+      spread_minado: { min: 0.5, max: 2.0 } // NUEVO CAMPO SPREAD DE MINADO
     }
   });
 
@@ -69,23 +76,19 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     activos_predefinidos: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'GOLD', 'SILVER', 'OIL', 'BTC', 'ETH']
   };
 
-  // Función para calcular preview de combinaciones - CORREGIDA
+  // Función para calcular preview de combinaciones
   useEffect(() => {
     const calcularCombinaciones = () => {
       const tecnicasEnabled = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
-      
-      // CORRECCIÓN: Solo 1 bot sin importar cuántas técnicas se seleccionen
       const total = tecnicasEnabled.length > 0 ? 1 : 1;
 
       const ejemplos = [];
       if (config.activo && config.temporalidad && config.direccion && config.tipo_entrada) {
         if (tecnicasEnabled.length > 0) {
-          // Un solo bot con todas las técnicas combinadas
           const tecnicasCombinadas = tecnicasEnabled.join('+');
           const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnicasCombinadas}_${config.oss_config || 'SinOSS'}`;
           ejemplos.push(nombre);
         } else {
-          // Bot por defecto con SPP
           const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_SPP_${config.oss_config || 'SinOSS'}`;
           ejemplos.push(nombre);
         }
@@ -130,7 +133,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }));
   };
 
-  // Manejar cambios en técnicas
+  // Manejar cambios en técnicas - ACTUALIZADO PARA MC LENTO
   const handleTecnicaChange = (tecnica, field, value) => {
     setConfig(prev => ({
       ...prev,
@@ -178,7 +181,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
     }
   };
 
-  // Generar configuraciones - LÓGICA CORREGIDA
+  // Generar configuraciones
   const generarConfiguraciones = async () => {
     if (!user) {
       alert('Debes iniciar sesión para generar configuraciones');
@@ -208,7 +211,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
       let magicNumberBase = (maxMagic?.[0]?.magic_number || 1000) + 1;
 
-      // CORRECCIÓN: Generar UN SOLO BOT con todas las técnicas combinadas
       const tecnicasToUse = tecnicasEnabled.length ? tecnicasEnabled : ['SPP'];
       
       // Combinar todas las técnicas en un solo objeto
@@ -218,15 +220,19 @@ const MassiveGenerator = ({ user, onDataChange }) => {
       tecnicasToUse.forEach(tecnica => {
         const tecnicaConfig = config.tecnicas[tecnica] || { min: 100, max: 500 };
         const simulaciones = Math.floor(Math.random() * (tecnicaConfig.max - tecnicaConfig.min + 1)) + tecnicaConfig.min;
-        tecnicasCombinadas[tecnica] = simulaciones;
+        tecnicasCombinadas[tecnica] = {
+          simulaciones: simulaciones,
+          ...(tecnica === 'MC Lento' && tecnicaConfig.spread_min !== undefined && {
+            spread_min: tecnicaConfig.spread_min,
+            spread_max: tecnicaConfig.spread_max
+          })
+        };
         totalSimulaciones += simulaciones;
       });
 
-      // Crear nombre combinado con todas las técnicas
       const tecnicasNombres = tecnicasToUse.join('+');
       const nombreCompleto = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnicasNombres}_${config.oss_config || 'SinOSS'}_${magicNumberBase}`;
       
-      // UN SOLO BOT con todas las técnicas
       const configuracion = {
         user_id: user.id,
         nombre_base: config.nombre_base,
@@ -239,7 +245,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
         oss_config: config.oss_config || 'Sin OSS',
         horario_avanzado: config.horario_avanzado,
         trading_option: config.trading_option,
-        tecnicas_simulaciones: tecnicasCombinadas, // TODAS las técnicas en un solo bot
+        tecnicas_simulaciones: tecnicasCombinadas,
         total_simulaciones: totalSimulaciones,
         atr_based: config.parametros_avanzados.atr_based,
         atr_multiple_min: config.parametros_avanzados.atr_multiple.min,
@@ -252,19 +258,20 @@ const MassiveGenerator = ({ user, onDataChange }) => {
         global_max: config.parametros_avanzados.global_max,
         global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
         global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
+        spread_minado_min: config.parametros_avanzados.spread_minado.min, // NUEVO CAMPO
+        spread_minado_max: config.parametros_avanzados.spread_minado.max, // NUEVO CAMPO
         estado: 'Generado'
       };
 
       const { error } = await supabase
         .from('bot_configurations')
-        .insert([configuracion]); // UN SOLO BOT
+        .insert([configuracion]);
       
       if (error) {
         console.error('Error insertando configuración:', error);
         throw error;
       }
 
-      // Mensaje más específico
       const mensajeTecnicas = tecnicasToUse.length > 1 
         ? `con ${tecnicasToUse.length} técnicas combinadas (${tecnicasToUse.join(', ')})`
         : `con técnica ${tecnicasToUse[0]}`;
@@ -371,7 +378,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 ))}
               </div>
               
-              {/* Opción para agregar activo personalizado */}
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
                   onClick={() => setShowCustomActivo(!showCustomActivo)}
@@ -568,7 +574,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🕐 Configuración de Horarios</h3>
             
-            {/* Exit At End Of Day */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
                 <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
@@ -584,11 +589,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                     type="checkbox"
                     checked={config.horario_avanzado.exit_at_end_of_day}
                     onChange={(e) => handleHorarioAvanzadoChange('exit_at_end_of_day', e.target.checked)}
-                    style={{
-                      opacity: 0,
-                      width: 0,
-                      height: 0
-                    }}
+                    style={{ opacity: 0, width: 0, height: 0 }}
                   />
                   <span style={{
                     position: 'absolute',
@@ -617,7 +618,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </label>
             </div>
 
-            {/* End Of Day Exit Time */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
@@ -644,7 +644,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </label>
             </div>
 
-            {/* Exit On Friday */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
                 <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
@@ -660,11 +659,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                     type="checkbox"
                     checked={config.horario_avanzado.exit_on_friday}
                     onChange={(e) => handleHorarioAvanzadoChange('exit_on_friday', e.target.checked)}
-                    style={{
-                      opacity: 0,
-                      width: 0,
-                      height: 0
-                    }}
+                    style={{ opacity: 0, width: 0, height: 0 }}
                   />
                   <span style={{
                     position: 'absolute',
@@ -693,7 +688,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </label>
             </div>
 
-            {/* Friday Exit Time */}
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
@@ -721,11 +715,10 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Trading Option - EN ESPAÑOL */}
+          {/* Trading Option */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Opciones de Trading</h3>
             
-            {/* Rango de Tiempo */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
@@ -775,7 +768,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </div>
             </div>
 
-            {/* Salir al Final del Rango */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
@@ -788,7 +780,6 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </label>
             </div>
 
-            {/* Tipos de Órdenes a Cerrar */}
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
                 Tipos de Órdenes a Cerrar 🕐:
@@ -814,7 +805,7 @@ const MassiveGenerator = ({ user, onDataChange }) => {
             </div>
           </div>
 
-          {/* Técnicas Avanzadas - CON NUEVAS TÉCNICAS */}
+          {/* Técnicas Avanzadas - CON MC LENTO SPREAD */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
             <p style={{ fontSize: '14px', color: '#666', marginBottom: '15px' }}>
@@ -841,54 +832,99 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 </div>
                 
                 {config.tecnicas[tecnica].enabled && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
-                        Simulaciones Mín:
-                      </label>
-                      <input
-                        type="number"
-                        value={config.tecnicas[tecnica].min}
-                        onChange={(e) => handleTecnicaChange(tecnica, 'min', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px',
-                          border: '1px solid rgba(255,255,255,0.3)',
-                          borderRadius: '3px',
-                          background: 'rgba(255,255,255,0.2)',
-                          color: 'white'
-                        }}
-                      />
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: tecnica === 'MC Lento' ? '10px' : '0' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                          Simulaciones Mín:
+                        </label>
+                        <input
+                          type="number"
+                          value={config.tecnicas[tecnica].min}
+                          onChange={(e) => handleTecnicaChange(tecnica, 'min', e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '5px',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            borderRadius: '3px',
+                            background: 'rgba(255,255,255,0.2)',
+                            color: 'white'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                          Simulaciones Máx:
+                        </label>
+                        <input
+                          type="number"
+                          value={config.tecnicas[tecnica].max}
+                          onChange={(e) => handleTecnicaChange(tecnica, 'max', e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '5px',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            borderRadius: '3px',
+                            background: 'rgba(255,255,255,0.2)',
+                            color: 'white'
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
-                        Simulaciones Máx:
-                      </label>
-                      <input
-                        type="number"
-                        value={config.tecnicas[tecnica].max}
-                        onChange={(e) => handleTecnicaChange(tecnica, 'max', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px',
-                          border: '1px solid rgba(255,255,255,0.3)',
-                          borderRadius: '3px',
-                          background: 'rgba(255,255,255,0.2)',
-                          color: 'white'
-                        }}
-                      />
-                    </div>
+                    
+                    {/* CAMPOS SPREAD PARA MC LENTO */}
+                    {tecnica === 'MC Lento' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                            Spread Mínimo:
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={config.tecnicas[tecnica].spread_min}
+                            onChange={(e) => handleTecnicaChange(tecnica, 'spread_min', e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '5px',
+                              border: '1px solid rgba(255,255,255,0.3)',
+                              borderRadius: '3px',
+                              background: 'rgba(255,255,255,0.2)',
+                              color: 'white'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
+                            Spread Máximo:
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={config.tecnicas[tecnica].spread_max}
+                            onChange={(e) => handleTecnicaChange(tecnica, 'spread_max', e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '5px',
+                              border: '1px solid rgba(255,255,255,0.3)',
+                              borderRadius: '3px',
+                              background: 'rgba(255,255,255,0.2)',
+                              color: 'white'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             ))}
           </div>
 
-          {/* Parámetros Avanzados */}
+          {/* Parámetros Avanzados - CON SPREAD DE MINADO */}
           <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
             
-            {/* ATR-based Checkbox */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
@@ -1009,7 +1045,61 @@ const MassiveGenerator = ({ user, onDataChange }) => {
                 </div>
               </div>
 
-              {/* Otros parámetros simples */}
+              {/* Spread de Minado - NUEVO CAMPO */}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                  Spread de Minado:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={config.parametros_avanzados.spread_minado.min}
+                      onChange={(e) => handleRangeChange('spread_minado', 'min', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="0.1"
+                      max="10.0"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={config.parametros_avanzados.spread_minado.max}
+                      onChange={(e) => handleRangeChange('spread_minado', 'max', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '5px',
+                        fontSize: '14px'
+                      }}
+                      min="0.1"
+                      max="10.0"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
+                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+                  Mín: {config.parametros_avanzados.spread_minado.min} - Máx: {config.parametros_avanzados.spread_minado.max}
+                </div>
+              </div>
+
+              {/* Otros parámetros */}
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
                   Período Mín:
@@ -1129,10 +1219,9 @@ const MassiveGenerator = ({ user, onDataChange }) => {
 
         </div>
 
-        {/* Panel de Preview y Generación */}
+        {/* Panel de Preview y Generación - ACTUALIZADO */}
         <div>
           
-          {/* Preview de Combinaciones */}
           <div style={{
             position: 'sticky',
             top: '20px',
@@ -1158,20 +1247,40 @@ const MassiveGenerator = ({ user, onDataChange }) => {
               </div>
             </div>
 
+            {/* CONFIGURACIÓN COMPLETA EN PREVIEW */}
             <div style={{ marginBottom: '15px' }}>
               <strong>Configuración:</strong>
-              <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '5px' }}>
-                • Activo: <strong>{config.activo}</strong><br/>
-                • Temporalidad: <strong>{config.temporalidad || 'No seleccionada'}</strong><br/>
-                • Dirección: <strong>{config.direccion || 'No seleccionada'}</strong><br/>
-                • Tipo Entrada: <strong>{config.tipo_entrada || 'No seleccionado'}</strong><br/>
-                • OSS: <strong>{config.oss_config || 'No seleccionado'}</strong><br/>
-                • Rango: <strong>{config.trading_option.time_range_from} - {config.trading_option.time_range_to}</strong><br/>
-                • Cerrar Órdenes: <strong>{opciones.order_types_to_close.find(opt => opt.value === config.trading_option.order_types_to_close)?.label}</strong><br/>
-                • Técnicas: <strong>{Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).length || 'Ninguna'}</strong>
+              <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '5px' }}>
+                • <strong>Activo:</strong> {config.activo}<br/>
+                • <strong>Temporalidad:</strong> {config.temporalidad || 'No seleccionada'}<br/>
+                • <strong>Dirección:</strong> {config.direccion || 'No seleccionada'}<br/>
+                • <strong>Tipo Entrada:</strong> {config.tipo_entrada || 'No seleccionado'}<br/>
+                • <strong>OSS:</strong> {config.oss_config || 'No seleccionado'}<br/>
+                
+                {/* HORARIOS */}
+                • <strong>Horarios:</strong><br/>
+                &nbsp;&nbsp;- Exit End Day: {config.horario_avanzado.exit_at_end_of_day ? `Sí (${config.horario_avanzado.end_of_day_exit_time})` : 'No'}<br/>
+                &nbsp;&nbsp;- Exit Friday: {config.horario_avanzado.exit_on_friday ? `Sí (${config.horario_avanzado.friday_exit_time})` : 'No'}<br/>
+                
+                {/* TRADING OPTIONS */}
+                • <strong>Trading Range:</strong> {config.trading_option.time_range_from} - {config.trading_option.time_range_to}<br/>
+                • <strong>Cerrar Órdenes:</strong> {opciones.order_types_to_close.find(opt => opt.value === config.trading_option.order_types_to_close)?.label}<br/>
+                
+                {/* PARÁMETROS AVANZADOS */}
+                • <strong>ATR Multiple:</strong> {config.parametros_avanzados.atr_multiple.min} - {config.parametros_avanzados.atr_multiple.max}<br/>
+                • <strong>Spread Minado:</strong> {config.parametros_avanzados.spread_minado.min} - {config.parametros_avanzados.spread_minado.max}<br/>
+                
+                {/* TÉCNICAS */}
+                • <strong>Técnicas:</strong> {Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).length || 'Ninguna'}
                 {Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).length > 0 && (
-                  <div style={{ marginTop: '5px', fontSize: '12px' }}>
-                    ({Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).join(' + ')})
+                  <div style={{ marginTop: '3px', fontSize: '11px' }}>
+                    &nbsp;&nbsp;({Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled).map(t => {
+                      const tecnica = config.tecnicas[t];
+                      if (t === 'MC Lento' && tecnica.spread_min !== undefined) {
+                        return `${t}: ${tecnica.min}-${tecnica.max} sim, ${tecnica.spread_min}-${tecnica.spread_max} spread`;
+                      }
+                      return `${t}: ${tecnica.min}-${tecnica.max} sim`;
+                    }).join(' | ')})
                   </div>
                 )}
               </div>
