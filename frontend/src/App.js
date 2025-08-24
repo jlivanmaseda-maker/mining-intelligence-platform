@@ -1,1221 +1,760 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import MassiveGenerator from './components/MassiveGenerator';
 
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-const MassiveGenerator = ({ user, onDataChange }) => {
-  const [config, setConfig] = useState({
-    nombre_base: 'Bot_Masivo',
-    activo: 'EURUSD',
-    temporalidad: '',
-    direccion: '',
-    tipo_entrada: '',
-    oss_config: '',
-    horario_avanzado: {
-      exit_at_end_of_day: true,
-      end_of_day_exit_time: '15:00',
-      exit_on_friday: true,
-      friday_exit_time: '23:00'
-    },
-    trading_option: {
-      time_range_from: '02:00',
-      time_range_to: '22:00',
-      exit_at_end_of_range: false,
-      order_types_to_close: 'All'
-    },
-    tecnicas: {
-      SPP: { enabled: false, min: 100, max: 1000 },
-      WFM: { enabled: false, min: 100, max: 800 },
-      'MC Trade': { enabled: false, min: 50, max: 500 },
-      'MC Lento': { enabled: false, min: 100, max: 300 }
-    },
-    parametros_avanzados: {
-      atr_based: false,
-      atr_multiple: { min: 1.5, max: 3.0 },
-      atr_periodo: { min: 14, max: 20 },
-      periodo_min: 2,
-      periodo_max: 100,
-      global_min: 2,
-      global_max: 130,
-      global_indicadores: { min: 1, max: 5 }
+function App() {
+  const [user, setUser] = useState(null);
+  const [globalStats, setGlobalStats] = useState(null);
+  const [userBots, setUserBots] = useState([]);
+  const [globalPatterns, setGlobalPatterns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [authError, setAuthError] = useState(null);
+
+  // Función para cargar todos los datos
+  const loadAllData = async () => {
+    try {
+      // Obtener estadísticas globales
+      const { data: patterns } = await supabase
+        .from('global_mining_patterns')
+        .select('*')
+        .order('indice_exito', { ascending: false })
+        .limit(10);
+
+      setGlobalPatterns(patterns || []);
+
+      // Si hay usuario, obtener sus bots
+      if (user) {
+        const { data: bots } = await supabase
+          .from('bot_configurations')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('fecha_creacion', { ascending: false });
+
+        setUserBots(bots || []);
+
+        // Calcular estadísticas del usuario
+        const userStats = {
+          total_bots: bots?.length || 0,
+          active_bots: bots?.filter(bot => bot.estado === 'Activo').length || 0,
+          generated_bots: bots?.filter(bot => bot.estado === 'Generado').length || 0
+        };
+        setGlobalStats(userStats);
+      } else {
+        setUserBots([]);
+        setGlobalStats(null);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
     }
-  });
-
-  const [customActivo, setCustomActivo] = useState('');
-  const [showCustomActivo, setShowCustomActivo] = useState(false);
-  const [preview, setPreview] = useState({
-    totalCombinaciones: 0,
-    ejemplos: []
-  });
-  
-  const [generating, setGenerating] = useState(false);
-
-  // Opciones disponibles
-  const opciones = {
-    temporalidades: ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'],
-    direcciones: ['Long', 'Short', 'Both'],
-    tipos_entrada: ['Market', 'Limit', 'Stop'],
-    oss_configs: ['Sin OSS', 'OSS Final', 'OSS Invertido', 'OSS Intermedio'],
-    order_types_to_close: [
-      { value: 'All', label: 'Todas las órdenes' },
-      { value: 'Pending', label: 'Solo órdenes pendientes' },
-      { value: 'Live', label: 'Solo órdenes en vivo' }
-    ],
-    activos_predefinidos: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'GOLD', 'SILVER', 'OIL', 'BTC', 'ETH']
   };
 
-  // Función para calcular preview de combinaciones
   useEffect(() => {
-    const calcularCombinaciones = () => {
-      const tecnicasEnabled = Object.values(config.tecnicas).filter(t => t.enabled);
-      const totalTecnicas = tecnicasEnabled.length || 1;
-      const total = totalTecnicas;
+    // Función para obtener la sesión actual - MEJORADA
+    const initializeAuth = async () => {
+      try {
+        // Limpiar cualquier error previo
+        setAuthError(null);
 
-      const ejemplos = [];
-      if (config.activo && config.temporalidad && config.direccion && config.tipo_entrada) {
-        const tecnicasHabilitadas = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
+        // Obtener sesión actual
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (tecnicasHabilitadas.length > 0) {
-          tecnicasHabilitadas.forEach((tecnica, index) => {
-            if (index < 5) {
-              const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnica}_${config.oss_config || 'SinOSS'}`;
-              ejemplos.push(nombre);
-            }
-          });
+        if (sessionError) {
+          console.error('Error getting session:', sessionError);
+          setAuthError(sessionError.message);
         } else {
-          const nombre = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_SPP_${config.oss_config || 'SinOSS'}`;
-          ejemplos.push(nombre);
+          setUser(session?.user ?? null);
         }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        setAuthError('Error de conexión con el servicio de autenticación');
+      } finally {
+        setLoading(false);
       }
-
-      setPreview({
-        totalCombinaciones: total,
-        ejemplos: ejemplos
-      });
     };
 
-    calcularCombinaciones();
-  }, [config]);
+    initializeAuth();
 
-  // Manejar cambios en selección única
-  const handleSingleChange = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Manejar cambios en horario avanzado
-  const handleHorarioAvanzadoChange = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      horario_avanzado: {
-        ...prev.horario_avanzado,
-        [field]: value
-      }
-    }));
-  };
-
-  // Manejar cambios en trading option
-  const handleTradingOptionChange = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      trading_option: {
-        ...prev.trading_option,
-        [field]: value
-      }
-    }));
-  };
-
-  // Manejar cambios en técnicas
-  const handleTecnicaChange = (tecnica, field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      tecnicas: {
-        ...prev.tecnicas,
-        [tecnica]: {
-          ...prev.tecnicas[tecnica],
-          [field]: field === 'enabled' ? value : parseFloat(value)
+    // Escuchar cambios de autenticación - MEJORADO
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, session?.user?.email || 'No user');
+        
+        setUser(session?.user ?? null);
+        setAuthError(null);
+        
+        // Manejar diferentes eventos
+        switch (event) {
+          case 'SIGNED_IN':
+            console.log('Usuario logueado exitosamente');
+            // Limpiar URL si hay hash de OAuth
+            if (window.location.hash.includes('access_token')) {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+            break;
+          case 'SIGNED_OUT':
+            console.log('Usuario cerró sesión');
+            setUserBots([]);
+            setGlobalStats(null);
+            setShowGenerator(false);
+            break;
+          case 'TOKEN_REFRESHED':
+            console.log('Token refrescado');
+            break;
+          default:
+            break;
         }
       }
-    }));
-  };
+    );
 
-  // Manejar cambios en parámetros avanzados
-  const handleParametroChange = (parametro, value) => {
-    setConfig(prev => ({
-      ...prev,
-      parametros_avanzados: {
-        ...prev.parametros_avanzados,
-        [parametro]: isNaN(parseFloat(value)) ? value : parseFloat(value)
-      }
-    }));
-  };
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Manejar cambios en rangos de parámetros avanzados
-  const handleRangeChange = (parametro, tipo, value) => {
-    setConfig(prev => ({
-      ...prev,
-      parametros_avanzados: {
-        ...prev.parametros_avanzados,
-        [parametro]: {
-          ...prev.parametros_avanzados[parametro],
-          [tipo]: parseFloat(value)
-        }
-      }
-    }));
-  };
-
-  // Agregar activo personalizado
-  const agregarActivoPersonalizado = () => {
-    if (customActivo.trim() && !opciones.activos_predefinidos.includes(customActivo.toUpperCase())) {
-      setConfig(prev => ({ ...prev, activo: customActivo.toUpperCase() }));
-      setCustomActivo('');
-      setShowCustomActivo(false);
+  // Cargar datos cuando cambie el usuario
+  useEffect(() => {
+    if (!loading && user) {
+      loadAllData();
     }
-  };
+  }, [user, loading]);
 
-  // Generar configuraciones
-  const generarConfiguraciones = async () => {
-    if (!user) {
-      alert('Debes iniciar sesión para generar configuraciones');
-      return;
-    }
-
-    if (!config.temporalidad || !config.direccion || !config.tipo_entrada) {
-      alert('Por favor completa todas las configuraciones básicas');
-      return;
-    }
-
-    const tecnicasEnabled = Object.keys(config.tecnicas).filter(t => config.tecnicas[t].enabled);
-    if (tecnicasEnabled.length === 0) {
-      if (!window.confirm('No has seleccionado técnicas específicas. ¿Generar con configuración SPP por defecto?')) {
-        return;
-      }
-    }
-
-    setGenerating(true);
+  const handleLogin = async () => {
     try {
-      const { data: maxMagic } = await supabase
-        .from('bot_configurations')
-        .select('magic_number')
-        .eq('user_id', user.id)
-        .order('magic_number', { ascending: false })
-        .limit(1);
-
-      let magicNumberBase = (maxMagic?.[0]?.magic_number || 1000) + 1;
-
-      const configuraciones = [];
-      const tecnicasToUse = tecnicasEnabled.length ? tecnicasEnabled : ['SPP'];
+      setAuthError(null);
       
-      for (const tecnica of tecnicasToUse) {
-        const tecnicaConfig = config.tecnicas[tecnica] || { min: 100, max: 500 };
-        const simulaciones = Math.floor(Math.random() * (tecnicaConfig.max - tecnicaConfig.min + 1)) + tecnicaConfig.min;
-        
-        const nombreCompleto = `${config.nombre_base}_${config.activo}_${config.temporalidad}_${config.direccion}_${config.tipo_entrada}_${tecnica}_${config.oss_config || 'SinOSS'}_${magicNumberBase}`;
-        
-        configuraciones.push({
-          user_id: user.id,
-          nombre_base: config.nombre_base,
-          nombre_completo: nombreCompleto,
-          magic_number: magicNumberBase++,
-          activo: config.activo,
-          temporalidad: config.temporalidad,
-          direccion: config.direccion,
-          tipo_entrada: config.tipo_entrada,
-          oss_config: config.oss_config || 'Sin OSS',
-          horario_avanzado: config.horario_avanzado,
-          trading_option: config.trading_option,
-          tecnicas_simulaciones: { [tecnica]: simulaciones },
-          atr_based: config.parametros_avanzados.atr_based,
-          atr_multiple_min: config.parametros_avanzados.atr_multiple.min,
-          atr_multiple_max: config.parametros_avanzados.atr_multiple.max,
-          atr_periodo_min: config.parametros_avanzados.atr_periodo.min,
-          atr_periodo_max: config.parametros_avanzados.atr_periodo.max,
-          periodo_min: config.parametros_avanzados.periodo_min,
-          periodo_max: config.parametros_avanzados.periodo_max,
-          global_min: config.parametros_avanzados.global_min,
-          global_max: config.parametros_avanzados.global_max,
-          global_indicadores_min: config.parametros_avanzados.global_indicadores.min,
-          global_indicadores_max: config.parametros_avanzados.global_indicadores.max,
-          estado: 'Generado'
-        });
-      }
-
-      const { error } = await supabase
-        .from('bot_configurations')
-        .insert(configuraciones);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
       
       if (error) {
-        console.error('Error insertando configuraciones:', error);
-        throw error;
+        console.error('Error in login:', error);
+        setAuthError(error.message);
+        
+        // Mensajes de error más específicos
+        if (error.message.includes('provider is not enabled')) {
+          alert('El proveedor GitHub no está habilitado. Verifica la configuración en Supabase.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          alert('Credenciales inválidas. Intenta de nuevo.');
+        } else {
+          alert(`Error al iniciar sesión: ${error.message}`);
+        }
+      } else {
+        console.log('Login iniciado correctamente, redirigiendo...');
       }
-
-      alert(`¡${configuraciones.length} configuración(es) creada(s) exitosamente!`);
-      
-      if (onDataChange) {
-        await onDataChange();
-      }
-
     } catch (error) {
-      console.error('Error generando configuraciones:', error);
-      alert('Error generando configuraciones: ' + error.message);
-    } finally {
-      setGenerating(false);
+      console.error('Unexpected login error:', error);
+      setAuthError('Error inesperado al iniciar sesión');
+      alert('Error inesperado. Por favor, recarga la página e intenta de nuevo.');
     }
   };
 
-  return (
-    <div style={{
-      background: 'white',
-      padding: '30px',
-      borderRadius: '15px',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-      maxWidth: '1400px',
-      margin: '20px auto'
-    }}>
-      <header style={{
-        textAlign: 'center',
-        marginBottom: '30px'
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error logging out:', error);
+        alert('Error al cerrar sesión');
+      } else {
+        console.log('Logout exitoso');
+      }
+    } catch (error) {
+      console.error('Unexpected logout error:', error);
+    }
+  };
+
+  const createSampleBot = async () => {
+    if (!user) {
+      alert('Debes iniciar sesión primero');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const sampleBot = {
+        user_id: user.id,
+        nombre_base: `Bot_Ejemplo_${Date.now()}`,
+        nombre_completo: `Bot_Ejemplo_EURUSD_M15_Long_Limit_SPP_${Date.now()}`,
+        magic_number: Math.floor(Math.random() * 10000) + 1000,
+        activo: 'EURUSD',
+        temporalidad: 'M15',
+        direccion: 'Long',
+        tipo_entrada: 'Limit',
+        oss_config: 'OSS Final',
+        tecnicas_simulaciones: { 'SPP': 500, 'WFM': 300 },
+        estado: 'Generado'
+      };
+
+      const { data, error } = await supabase
+        .from('bot_configurations')
+        .insert([sampleBot])
+        .select();
+
+      if (error) {
+        console.error('Error creando bot:', error);
+        alert('Error creando bot de ejemplo: ' + error.message);
+      } else {
+        alert('¡Bot de ejemplo creado exitosamente!');
+        await loadAllData();
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error inesperado: ' + error.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px',
+        flexDirection: 'column',
+        gap: '20px'
       }}>
-        <h1 style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          margin: '0 0 20px 0',
-          padding: '20px',
-          borderRadius: '10px',
-          fontSize: '2em'
-        }}>
-          🎛️ Generador Masivo de Configuraciones
-        </h1>
-        <p style={{ color: '#666', fontSize: '16px', lineHeight: '1.6' }}>
-          Crea múltiples configuraciones de bots usando checkboxes exclusivos, técnicas avanzadas SPP/WFM/MC Trade, 
-          y parámetros OSS optimizados. La evolución de tu sistema Streamlit en formato web.
-        </p>
-      </header>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
-        
-        {/* Panel de Configuración */}
-        <div>
-          
-          {/* Configuración Básica */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#f8f9fa', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>⚙️ Configuración Básica</h3>
-            
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                Nombre Base:
-              </label>
-              <input
-                type="text"
-                value={config.nombre_base}
-                onChange={(e) => handleSingleChange('nombre_base', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '5px',
-                  fontSize: '14px'
-                }}
-                placeholder="Bot_Masivo"
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-                Activo (Selección única):
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '15px' }}>
-                {opciones.activos_predefinidos.map(activo => (
-                  <label key={activo} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '5px',
-                    padding: '8px',
-                    background: config.activo === activo ? '#007bff' : 'white',
-                    color: config.activo === activo ? 'white' : '#333',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    border: '2px solid #007bff',
-                    justifyContent: 'center'
-                  }}>
-                    <input
-                      type="radio"
-                      name="activo"
-                      value={activo}
-                      checked={config.activo === activo}
-                      onChange={(e) => handleSingleChange('activo', e.target.value)}
-                      style={{ display: 'none' }}
-                    />
-                    <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{activo}</span>
-                  </label>
-                ))}
-              </div>
-              
-              {/* Opción para agregar activo personalizado */}
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button
-                  onClick={() => setShowCustomActivo(!showCustomActivo)}
-                  style={{
-                    padding: '8px 15px',
-                    background: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  + Agregar Activo
-                </button>
-                {showCustomActivo && (
-                  <>
-                    <input
-                      type="text"
-                      value={customActivo}
-                      onChange={(e) => setCustomActivo(e.target.value.toUpperCase())}
-                      placeholder="BTCUSD"
-                      style={{
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '12px',
-                        width: '100px'
-                      }}
-                    />
-                    <button
-                      onClick={agregarActivoPersonalizado}
-                      disabled={!customActivo.trim()}
-                      style={{
-                        padding: '8px 12px',
-                        background: customActivo.trim() ? '#007bff' : '#6c757d',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px',
-                        cursor: customActivo.trim() ? 'pointer' : 'not-allowed',
-                        fontSize: '12px'
-                      }}
-                    >
-                      ✓
-                    </button>
-                  </>
-                )}
-              </div>
-              
-              {!opciones.activos_predefinidos.includes(config.activo) && config.activo && (
-                <div style={{ 
-                  marginTop: '10px', 
-                  padding: '8px 12px', 
-                  background: '#e3f2fd', 
-                  borderRadius: '5px',
-                  fontSize: '12px',
-                  color: '#1976d2'
-                }}>
-                  Activo personalizado seleccionado: <strong>{config.activo}</strong>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Temporalidades */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e3f2fd', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#1976d2' }}>⏰ Temporalidad (Selección única)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '10px' }}>
-              {opciones.temporalidades.map(temp => (
-                <label key={temp} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  padding: '8px',
-                  background: config.temporalidad === temp ? '#1976d2' : 'white',
-                  color: config.temporalidad === temp ? 'white' : '#333',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  border: '2px solid #1976d2',
-                  justifyContent: 'center'
-                }}>
-                  <input
-                    type="radio"
-                    name="temporalidad"
-                    value={temp}
-                    checked={config.temporalidad === temp}
-                    onChange={(e) => handleSingleChange('temporalidad', e.target.value)}
-                    style={{ display: 'none' }}
-                  />
-                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{temp}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Direcciones */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>📈 Dirección de Trading (Selección única)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {opciones.direcciones.map(dir => (
-                <label key={dir} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  padding: '12px',
-                  background: config.direccion === dir ? '#7b1fa2' : 'white',
-                  color: config.direccion === dir ? 'white' : '#333',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: '2px solid #7b1fa2',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  <input
-                    type="radio"
-                    name="direccion"
-                    value={dir}
-                    checked={config.direccion === dir}
-                    onChange={(e) => handleSingleChange('direccion', e.target.value)}
-                    style={{ display: 'none' }}
-                  />
-                  <span>{dir === 'Long' ? '📈 Long' : dir === 'Short' ? '📉 Short' : '🔄 Both'}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Tipos de Entrada */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🎯 Tipo de Entrada (Selección única)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {opciones.tipos_entrada.map(tipo => (
-                <label key={tipo} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  padding: '12px',
-                  background: config.tipo_entrada === tipo ? '#388e3c' : 'white',
-                  color: config.tipo_entrada === tipo ? 'white' : '#333',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: '2px solid #388e3c',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  <input
-                    type="radio"
-                    name="tipo_entrada"
-                    value={tipo}
-                    checked={config.tipo_entrada === tipo}
-                    onChange={(e) => handleSingleChange('tipo_entrada', e.target.value)}
-                    style={{ display: 'none' }}
-                  />
-                  <span>{tipo}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* OSS */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#fff3e0', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#f57c00' }}>🔧 Configuración OSS (Selección única)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-              {opciones.oss_configs.map(oss => (
-                <label key={oss} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  padding: '12px',
-                  background: config.oss_config === oss ? '#f57c00' : 'white',
-                  color: config.oss_config === oss ? 'white' : '#333',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: '2px solid #f57c00',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}>
-                  <input
-                    type="radio"
-                    name="oss_config"
-                    value={oss}
-                    checked={config.oss_config === oss}
-                    onChange={(e) => handleSingleChange('oss_config', e.target.value)}
-                    style={{ display: 'none' }}
-                  />
-                  <span>{oss}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Horario Avanzado - NUEVO DISEÑO (encima de Trading Option) */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e8f5e8', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#388e3c' }}>🕐 Configuración de Horarios</h3>
-            
-            {/* Exit At End Of Day */}
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
-                  Exit At End Of Day 🕐:
-                </span>
-                <div style={{
-                  position: 'relative',
-                  display: 'inline-block',
-                  width: '60px',
-                  height: '34px'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={config.horario_avanzado.exit_at_end_of_day}
-                    onChange={(e) => handleHorarioAvanzadoChange('exit_at_end_of_day', e.target.checked)}
-                    style={{
-                      opacity: 0,
-                      width: 0,
-                      height: 0
-                    }}
-                  />
-                  <span style={{
-                    position: 'absolute',
-                    cursor: 'pointer',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: config.horario_avanzado.exit_at_end_of_day ? '#007bff' : '#ccc',
-                    transition: '0.4s',
-                    borderRadius: '34px'
-                  }}>
-                    <span style={{
-                      position: 'absolute',
-                      content: '""',
-                      height: '26px',
-                      width: '26px',
-                      left: config.horario_avanzado.exit_at_end_of_day ? '30px' : '4px',
-                      bottom: '4px',
-                      backgroundColor: 'white',
-                      transition: '0.4s',
-                      borderRadius: '50%'
-                    }}></span>
-                  </span>
-                </div>
-              </label>
-            </div>
-
-            {/* End Of Day Exit Time */}
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
-                  End Of Day Exit Time 🕐:
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="time"
-                    value={config.horario_avanzado.end_of_day_exit_time}
-                    onChange={(e) => handleHorarioAvanzadoChange('end_of_day_exit_time', e.target.value)}
-                    style={{
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px',
-                      marginRight: '10px'
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
-                  </div>
-                </div>
-              </label>
-            </div>
-
-            {/* Exit On Friday */}
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
-                  Exit On Friday 🕐:
-                </span>
-                <div style={{
-                  position: 'relative',
-                  display: 'inline-block',
-                  width: '60px',
-                  height: '34px'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={config.horario_avanzado.exit_on_friday}
-                    onChange={(e) => handleHorarioAvanzadoChange('exit_on_friday', e.target.checked)}
-                    style={{
-                      opacity: 0,
-                      width: 0,
-                      height: 0
-                    }}
-                  />
-                  <span style={{
-                    position: 'absolute',
-                    cursor: 'pointer',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: config.horario_avanzado.exit_on_friday ? '#007bff' : '#ccc',
-                    transition: '0.4s',
-                    borderRadius: '34px'
-                  }}>
-                    <span style={{
-                      position: 'absolute',
-                      content: '""',
-                      height: '26px',
-                      width: '26px',
-                      left: config.horario_avanzado.exit_on_friday ? '30px' : '4px',
-                      bottom: '4px',
-                      backgroundColor: 'white',
-                      transition: '0.4s',
-                      borderRadius: '50%'
-                    }}></span>
-                  </span>
-                </div>
-              </label>
-            </div>
-
-            {/* Friday Exit Time */}
-            <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '160px' }}>
-                  Friday Exit Time 🕐:
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="time"
-                    value={config.horario_avanzado.friday_exit_time}
-                    onChange={(e) => handleHorarioAvanzadoChange('friday_exit_time', e.target.value)}
-                    style={{
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px',
-                      marginRight: '10px'
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Trading Option - EN ESPAÑOL */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#e1f5fe', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#0277bd' }}>⚡ Opciones de Trading</h3>
-            
-            {/* Rango de Tiempo */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Rango de Tiempo Desde 🕐:
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="time"
-                    value={config.trading_option.time_range_from}
-                    onChange={(e) => handleTradingOptionChange('time_range_from', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Rango de Tiempo Hasta 🕐:
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="time"
-                    value={config.trading_option.time_range_to}
-                    onChange={(e) => handleTradingOptionChange('time_range_to', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '10px' }}>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▲</button>
-                    <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>▼</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Salir al Final del Rango */}
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={config.trading_option.exit_at_end_of_range}
-                  onChange={(e) => handleTradingOptionChange('exit_at_end_of_range', e.target.checked)}
-                  style={{ transform: 'scale(1.2)' }}
-                />
-                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Salir al Final del Rango 🕐</span>
-              </label>
-            </div>
-
-            {/* Tipos de Órdenes a Cerrar */}
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                Tipos de Órdenes a Cerrar 🕐:
-              </label>
-              <select
-                value={config.trading_option.order_types_to_close}
-                onChange={(e) => handleTradingOptionChange('order_types_to_close', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '5px',
-                  fontSize: '14px',
-                  background: 'white'
-                }}
-              >
-                {opciones.order_types_to_close.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Técnicas Avanzadas */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#fce4ec', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#c2185b' }}>🧠 Técnicas de Minería Avanzadas</h3>
-            {Object.keys(config.tecnicas).map(tecnica => (
-              <div key={tecnica} style={{ 
-                marginBottom: '15px', 
-                padding: '15px', 
-                background: config.tecnicas[tecnica].enabled ? '#c2185b' : 'white',
-                color: config.tecnicas[tecnica].enabled ? 'white' : '#333',
-                borderRadius: '8px',
-                border: '2px solid #c2185b'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={config.tecnicas[tecnica].enabled}
-                      onChange={(e) => handleTecnicaChange(tecnica, 'enabled', e.target.checked)}
-                    />
-                    <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{tecnica}</span>
-                  </label>
-                </div>
-                
-                {config.tecnicas[tecnica].enabled && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
-                        Simulaciones Mín:
-                      </label>
-                      <input
-                        type="number"
-                        value={config.tecnicas[tecnica].min}
-                        onChange={(e) => handleTecnicaChange(tecnica, 'min', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px',
-                          border: '1px solid rgba(255,255,255,0.3)',
-                          borderRadius: '3px',
-                          background: 'rgba(255,255,255,0.2)',
-                          color: 'white'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>
-                        Simulaciones Máx:
-                      </label>
-                      <input
-                        type="number"
-                        value={config.tecnicas[tecnica].max}
-                        onChange={(e) => handleTecnicaChange(tecnica, 'max', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px',
-                          border: '1px solid rgba(255,255,255,0.3)',
-                          borderRadius: '3px',
-                          background: 'rgba(255,255,255,0.2)',
-                          color: 'white'
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Parámetros Avanzados */}
-          <div style={{ marginBottom: '25px', padding: '20px', background: '#f3e5f5', borderRadius: '10px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#7b1fa2' }}>🔬 Parámetros Avanzados</h3>
-            
-            {/* ATR-based Checkbox */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={config.parametros_avanzados.atr_based}
-                  onChange={(e) => handleParametroChange('atr_based', e.target.checked)}
-                  style={{ transform: 'scale(1.2)' }}
-                />
-                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>ATR-based</span>
-              </label>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-              
-              {/* ATR Multiple - Rango */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                  ATR Multiple:
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.atr_multiple.min}
-                      onChange={(e) => handleRangeChange('atr_multiple', 'min', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={config.parametros_avanzados.atr_multiple.max}
-                      onChange={(e) => handleRangeChange('atr_multiple', 'max', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="0.1"
-                      max="10.0"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-                  Mín: {config.parametros_avanzados.atr_multiple.min} - Máx: {config.parametros_avanzados.atr_multiple.max}
-                </div>
-              </div>
-
-              {/* ATR Period - Rango */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                  ATR Period:
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <input
-                      type="number"
-                      value={config.parametros_avanzados.atr_periodo.min}
-                      onChange={(e) => handleRangeChange('atr_periodo', 'min', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="1"
-                      max="100"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      value={config.parametros_avanzados.atr_periodo.max}
-                      onChange={(e) => handleRangeChange('atr_periodo', 'max', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '5px',
-                        fontSize: '14px'
-                      }}
-                      min="1"
-                      max="100"
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>−</button>
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px' }}>+</button>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-                  Mín: {config.parametros_avanzados.atr_periodo.min} - Máx: {config.parametros_avanzados.atr_periodo.max}
-                </div>
-              </div>
-
-              {/* Otros parámetros simples */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Período Mín:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.periodo_min}
-                  onChange={(e) => handleParametroChange('periodo_min', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Período Máx:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.periodo_max}
-                  onChange={(e) => handleParametroChange('periodo_max', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Global Mín:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.global_min}
-                  onChange={(e) => handleParametroChange('global_min', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }}>
-                  Global Máx:
-                </label>
-                <input
-                  type="number"
-                  value={config.parametros_avanzados.global_max}
-                  onChange={(e) => handleParametroChange('global_max', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Global Indicadores - Rango */}
-            <div style={{ marginTop: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                Global Indicadores (Rango):
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', maxWidth: '400px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Mínimo:</label>
-                  <input
-                    type="number"
-                    value={config.parametros_avanzados.global_indicadores.min}
-                    onChange={(e) => handleRangeChange('global_indicadores', 'min', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                    min="1"
-                    max="10"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Máximo:</label>
-                  <input
-                    type="number"
-                    value={config.parametros_avanzados.global_indicadores.max}
-                    onChange={(e) => handleRangeChange('global_indicadores', 'max', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px',
-                      fontSize: '14px'
-                    }}
-                    min="1"
-                    max="10"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Panel de Preview y Generación */}
-        <div>
-          
-          {/* Preview de Combinaciones */}
-          <div style={{
-            position: 'sticky',
-            top: '20px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            padding: '25px',
-            borderRadius: '15px',
-            marginBottom: '20px'
+        <div>🤖 Cargando Mining Intelligence Platform...</div>
+        {authError && (
+          <div style={{ 
+            color: '#dc3545', 
+            fontSize: '14px', 
+            textAlign: 'center',
+            background: '#f8d7da',
+            padding: '10px',
+            borderRadius: '5px',
+            maxWidth: '400px'
           }}>
-            <h3 style={{ margin: '0 0 20px 0' }}>📊 Preview de Generación</h3>
-            
-            <div style={{ 
-              background: 'rgba(255,255,255,0.2)', 
-              padding: '15px', 
-              borderRadius: '10px',
-              marginBottom: '15px'
-            }}>
-              <div style={{ fontSize: '2.5em', fontWeight: 'bold', textAlign: 'center' }}>
-                {preview.totalCombinaciones}
-              </div>
-              <div style={{ textAlign: 'center', fontSize: '14px', opacity: 0.9 }}>
-                Configuración(es) a generar
-              </div>
-            </div>
+            Error: {authError}
+          </div>
+        )}
+      </div>
+    );
+  }
 
-            <div style={{ marginBottom: '15px' }}>
-              <strong>Configuración:</strong>
-              <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '5px' }}>
-                • Activo: <strong>{config.activo}</strong><br/>
-                • Temporalidad: <strong>{config.temporalidad || 'No seleccionada'}</strong><br/>
-                • Dirección: <strong>{config.direccion || 'No seleccionada'}</strong><br/>
-                • Tipo Entrada: <strong>{config.tipo_entrada || 'No seleccionado'}</strong><br/>
-                • OSS: <strong>{config.oss_config || 'No seleccionado'}</strong><br/>
-                • Rango: <strong>{config.trading_option.time_range_from} - {config.trading_option.time_range_to}</strong><br/>
-                • Cerrar Órdenes: <strong>{opciones.order_types_to_close.find(opt => opt.value === config.trading_option.order_types_to_close)?.label}</strong><br/>
-                • Técnicas: <strong>{Object.values(config.tecnicas).filter(t => t.enabled).length || 'Ninguna'}</strong>
-              </div>
-            </div>
-
-            {preview.ejemplos.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <strong>Ejemplos:</strong>
-                <div style={{ 
-                  background: 'rgba(0,0,0,0.2)', 
-                  padding: '10px', 
-                  borderRadius: '5px',
-                  marginTop: '5px',
-                  fontSize: '11px',
-                  fontFamily: 'monospace'
-                }}>
-                  {preview.ejemplos.map((ejemplo, index) => (
-                    <div key={index}>{ejemplo}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+  // Si se está mostrando el generador, renderizar solo eso
+  if (showGenerator) {
+    return (
+      <div>
+        {/* Botón para volver al dashboard */}
+        <div style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          right: '20px', 
+          zIndex: 1000,
+          display: 'flex',
+          gap: '10px'
+        }}>
+          <button
+            onClick={() => setShowGenerator(false)}
+            style={{
+              padding: '10px 20px',
+              background: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            📊 Volver al Dashboard
+          </button>
+          {user && (
             <button
-              onClick={generarConfiguraciones}
-              disabled={generating || !config.temporalidad || !config.direccion || !config.tipo_entrada || !user}
+              onClick={handleLogout}
               style={{
-                width: '100%',
-                padding: '15px',
-                background: generating ? '#6c757d' : (!config.temporalidad || !config.direccion || !config.tipo_entrada || !user) ? '#dc3545' : '#28a745',
+                padding: '10px 20px',
+                background: '#dc3545',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                cursor: generating || !config.temporalidad || !config.direccion || !config.tipo_entrada || !user ? 'not-allowed' : 'pointer'
+                cursor: 'pointer',
+                fontSize: '14px'
               }}
             >
-              {generating 
-                ? '⏳ Generando...' 
-                : !user 
-                  ? '🔐 Inicia Sesión' 
-                  : (!config.temporalidad || !config.direccion || !config.tipo_entrada)
-                    ? '❌ Completa: Temporalidad, Direcciones y Tipo de Entrada'
-                    : `🚀 Generar ${preview.totalCombinaciones} Configuración${preview.totalCombinaciones !== 1 ? 'es' : ''}`
-              }
+              Cerrar Sesión
             </button>
+          )}
+        </div>
+        
+        {user ? (
+          <MassiveGenerator user={user} onDataChange={loadAllData} />
+        ) : (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            fontSize: '18px',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <div>🔐 Debes iniciar sesión para acceder al Generador Masivo</div>
+            <button
+              onClick={handleLogin}
+              style={{
+                padding: '12px 24px',
+                background: '#24292e',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}
+            >
+              📱 Iniciar Sesión con GitHub
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-            {(!config.temporalidad || !config.direccion || !config.tipo_entrada) && (
+  return (
+    <div style={{
+      padding: '20px',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      {/* Header */}
+      <header style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        padding: '30px',
+        borderRadius: '15px',
+        marginBottom: '30px',
+        textAlign: 'center'
+      }}>
+        <h1 style={{ margin: 0, fontSize: '2.5em' }}>
+          🤖 Mining Intelligence Platform
+        </h1>
+        <p style={{ margin: '10px 0 0 0', fontSize: '1.2em', opacity: 0.9 }}>
+          Sistema de Inteligencia Colectiva para Trading Algorítmico
+        </p>
+      </header>
+
+      {/* Authentication Status - MEJORADO */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '30px',
+        padding: '20px',
+        background: user ? '#d4edda' : '#f8f9fa',
+        borderRadius: '10px',
+        border: user ? '2px solid #28a745' : '1px solid #dee2e6'
+      }}>
+        {user ? (
+          <>
+            <div>
+              <span style={{ fontSize: '16px', color: '#155724', fontWeight: 'bold' }}>
+                ✅ ¡Sistema Funcionando Perfectamente!
+              </span>
+              <div style={{ fontSize: '14px', color: '#155724', marginTop: '5px' }}>
+                Conectado como: <strong>{user.email}</strong>
+              </div>
+              {user.user_metadata?.avatar_url && (
+                <img 
+                  src={user.user_metadata.avatar_url} 
+                  alt="Avatar"
+                  style={{ 
+                    width: '32px', 
+                    height: '32px', 
+                    borderRadius: '50%', 
+                    marginLeft: '10px',
+                    verticalAlign: 'middle'
+                  }}
+                />
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowGenerator(true)}
+                style={{
+                  padding: '12px 24px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                }}
+              >
+                🎛️ Generador Masivo
+              </button>
+              <button
+                onClick={createSampleBot}
+                disabled={creating}
+                style={{
+                  padding: '10px 20px',
+                  background: creating ? '#6c757d' : '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: creating ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {creating ? '⏳ Creando...' : '🤖 Crear Bot Ejemplo'}
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '10px 20px',
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <span style={{ fontSize: '16px', color: '#6c757d' }}>
+                🔐 Inicia sesión para acceder a todas las funcionalidades
+              </span>
+              <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
+                Usa tu cuenta GitHub para autenticarte de forma segura
+              </div>
+              {authError && (
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#dc3545', 
+                  marginTop: '5px',
+                  background: '#f8d7da',
+                  padding: '5px',
+                  borderRadius: '3px'
+                }}>
+                  Error: {authError}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleLogin}
+              style={{
+                padding: '12px 24px',
+                background: '#24292e',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>🚀</span>
+              Iniciar Sesión con GitHub
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Dashboard Personal (si hay usuario) */}
+      {user && (
+        <div style={{
+          background: 'white',
+          padding: '25px',
+          borderRadius: '15px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          marginBottom: '30px'
+        }}>
+          <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+            👤 Tu Dashboard Personal
+          </h2>
+          
+          {/* Estadísticas Personales */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ textAlign: 'center', padding: '15px', background: '#e8f4fd', borderRadius: '10px' }}>
+              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#007bff' }}>
+                {globalStats?.total_bots || 0}
+              </div>
+              <div style={{ color: '#666', fontSize: '14px' }}>Total Bots</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '15px', background: '#d4edda', borderRadius: '10px' }}>
+              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#28a745' }}>
+                {globalStats?.generated_bots || 0}
+              </div>
+              <div style={{ color: '#666', fontSize: '14px' }}>Bots Generados</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '15px', background: '#fff3cd', borderRadius: '10px' }}>
+              <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#856404' }}>
+                {globalStats?.active_bots || 0}
+              </div>
+              <div style={{ color: '#666', fontSize: '14px' }}>Bots Activos</div>
+            </div>
+          </div>
+
+          {/* Lista de Bots */}
+          {userBots.length > 0 ? (
+            <div>
+              <h3 style={{ margin: '20px 0 15px 0', color: '#333' }}>🤖 Tus Bots Creados</h3>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {userBots.slice(0, 5).map((bot) => (
+                  <div key={bot.id} style={{
+                    padding: '15px',
+                    background: '#f8f9fa',
+                    borderRadius: '8px',
+                    borderLeft: '4px solid #007bff',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 5px 0', color: '#333' }}>
+                        {bot.nombre_base}
+                      </h4>
+                      <p style={{ margin: '0', fontSize: '14px', color: '#666' }}>
+                        {bot.activo} - {bot.temporalidad} - {bot.direccion} - {bot.tipo_entrada}
+                        {bot.oss_config !== 'Sin OSS' && ` - ${bot.oss_config}`}
+                      </p>
+                                            <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
+                        Magic Number: {bot.magic_number} | Estado: {bot.estado}
+                        {bot.total_simulaciones && ` | Total Simulaciones: ${bot.total_simulaciones}`}
+                      </p>
+                    </div>
+                    <div style={{
+                      padding: '5px 10px',
+                      background: bot.estado === 'Activo' ? '#d4edda' : '#fff3cd',
+                      color: bot.estado === 'Activo' ? '#155724' : '#856404',
+                      borderRadius: '15px',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}>
+                      {bot.estado}
+                    </div>
+                  </div>
+                ))}
+                {userBots.length > 5 && (
+                  <div style={{ textAlign: 'center', padding: '10px', color: '#666' }}>
+                    ... y {userBots.length - 5} bots más
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              textAlign: 'center',
+              padding: '40px',
+              background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
+              borderRadius: '15px'
+            }}>
+              <h3 style={{ color: '#333', marginBottom: '15px' }}>
+                🚀 ¡Comienza Creando tu Primer Bot!
+              </h3>
+              <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
+                Usa el botón <strong>"Crear Bot Ejemplo"</strong> para probar el sistema, o 
+                el <strong>"Generador Masivo"</strong> para crear múltiples configuraciones avanzadas. 
+              </p>
               <div style={{
-                marginTop: '10px',
-                padding: '10px',
-                background: 'rgba(255,193,7,0.3)',
-                borderRadius: '5px',
-                fontSize: '12px',
-                textAlign: 'center'
+                background: 'rgba(255,255,255,0.8)',
+                padding: '15px',
+                borderRadius: '10px',
+                marginTop: '15px'
               }}>
-                ⚠️ Completa: Temporalidad, Direcciones y Tipo de Entrada
+                <p style={{ margin: '0 0 10px 0', color: '#1976d2', fontWeight: 'bold' }}>
+                  🎛️ Generador Masivo Disponible
+                </p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Checkboxes exclusivos, técnicas SPP/WFM/MC Trade/Secuencial/High Back Test Precision, 
+                  configuración OSS, generación de configuraciones únicas con técnicas combinadas.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dashboard Global */}
+      <div style={{
+        background: 'white',
+        padding: '25px',
+        borderRadius: '15px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        marginBottom: '30px'
+      }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+          📊 Estadísticas Globales de la Comunidad
+        </h2>
+        
+        {globalPatterns && globalPatterns.length > 0 ? (
+          <div>
+            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>🔍 Patrones Exitosos Identificados</h3>
+            <div style={{ display: 'grid', gap: '15px' }}>
+              {globalPatterns.map((pattern, index) => (
+                <div key={index} style={{
+                  padding: '15px',
+                  background: '#f8f9fa',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #28a745'
+                }}>
+                  <h4 style={{ margin: '0 0 10px 0' }}>
+                    {pattern.activo} - {pattern.temporalidad} - {pattern.direccion}
+                  </h4>
+                  <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                    <strong>Tipo Entrada:</strong> {pattern.tipo_entrada} | 
+                    <strong> OSS:</strong> {pattern.oss_config}
+                  </p>
+                  <p style={{ margin: '5px 0', fontSize: '14px', color: '#28a745' }}>
+                    <strong>Índice de Éxito:</strong> {pattern.indice_exito}% 
+                    <span style={{ color: '#666' }}>
+                      ({pattern.total_bots_evaluados} evaluaciones)
+                    </span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px',
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            borderRadius: '15px'
+          }}>
+            <h3 style={{ color: '#333', marginBottom: '15px' }}>
+              🎯 Tu "Wikipedia del Trading Algorítmico" Está Lista
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', lineHeight: '1.6' }}>
+              Los patrones exitosos de la comunidad aparecerán aquí cuando los usuarios evalúen sus estrategias.
+              ¡Sé el primero en contribuir!
+            </p>
+            {user && (
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.1)',
+                padding: '20px',
+                borderRadius: '10px',
+                marginTop: '20px'
+              }}>
+                <p style={{ margin: '0 0 10px 0', color: '#667eea', fontWeight: 'bold' }}>
+                  🎛️ Genera Múltiples Configuraciones
+                </p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Usa el Generador Masivo para crear configuraciones con checkboxes exclusivos, 
+                  técnicas avanzadas combinadas y parámetros OSS. Contribuye a la inteligencia colectiva.
+                </p>
               </div>
             )}
           </div>
-
-        </div>
-
+        )}
       </div>
+
+      {/* Funcionalidades del Sistema */}
+      <div style={{
+        background: 'white',
+        padding: '25px',
+        borderRadius: '15px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+          🚀 Tu Plataforma de Inteligencia Colectiva
+        </h2>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+          <div style={{ 
+            padding: '15px', 
+            background: user ? '#e3f2fd' : '#f8f9fa', 
+            borderRadius: '8px',
+            border: user ? '2px solid #1976d2' : '1px solid #dee2e6'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', color: user ? '#1976d2' : '#6c757d' }}>
+              🎛️ Generador Masivo {user ? '✅' : '🔒'}
+            </h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Checkboxes exclusivos, técnicas SPP/WFM/MC Trade/Secuencial/High Back Test Precision, configuración OSS
+            </p>
+            {user && (
+              <button
+                onClick={() => setShowGenerator(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 16px',
+                  background: '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Abrir Generador
+              </button>
+            )}
+          </div>
+          
+          <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>📊 Dashboard Global</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Comparación personal vs global, benchmarking automático
+            </p>
+          </div>
+          
+          <div style={{ padding: '15px', background: '#e8f5e8', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>🧠 IA Recomendaciones</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Sugerencias basadas en patrones exitosos de la comunidad
+            </p>
+          </div>
+          
+          <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>⚡ Sistema Real-time</h4>
+            <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+              Updates automáticos de estadísticas y nuevos insights
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer style={{
+        textAlign: 'center',
+        padding: '30px 20px',
+        color: '#666',
+        borderTop: '1px solid #eee',
+        marginTop: '40px'
+      }}>
+        <p style={{ margin: 0 }}>
+          🤖 <strong>Mining Intelligence Platform</strong> - 
+          La primera plataforma colaborativa para encontrar las mejores estrategias de trading algorítmico
+        </p>
+        <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
+          ✅ Sistema funcionando: Supabase + React + GitHub OAuth + Netlify - {user ? 'Autenticado' : 'Listo para autenticar'}
+        </p>
+        {user && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#28a745', fontWeight: 'bold' }}>
+            🎛️ Generador Masivo activado - Un solo bot con múltiples técnicas combinadas
+          </p>
+        )}
+      </footer>
     </div>
   );
-};
+}
 
-export default MassiveGenerator;
+export default App;
+
