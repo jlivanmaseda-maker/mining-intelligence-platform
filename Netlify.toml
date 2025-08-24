@@ -1,9 +1,9 @@
-# Crear el archivo netlify.toml correcto
-$netlifyContent = @"
+# Actualizar netlify.toml en la raíz
+@"
 [build]
+  base = "frontend"
   command = "npm run build"
   publish = "build"
-  base = "frontend"
 
 [build.environment]
   NODE_VERSION = "18"
@@ -11,19 +11,11 @@ $netlifyContent = @"
 
 [[redirects]]
   from = "/api/*"
-  to = "https://your-backend-url.onrender.com/api/:splat"
+  to = "https://mining-intelligence-platform.onrender.com/api/:splat"
   status = 200
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[context.production.environment]
-  REACT_APP_API_URL = "https://your-backend-url.onrender.com"
-
-[context.deploy-preview.environment]
-  REACT_APP_API_URL = "https://your-backend-staging-url.onrender.com"
-"@
-
-$netlifyContent | Out-File -FilePath "netlify.toml" -Encoding utf8
+"@ | Out-File -FilePath "netlify.toml" -Encoding utf8
