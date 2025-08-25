@@ -513,7 +513,7 @@ const ImportExport = ({ user, supabase, onDataChange }) => {
         textAlign: 'center'
       }}>
         <h4 style={{ margin: '0 0 10px 0' }}>💡 Consejos de Uso</h4>
-        <div style={{ fontSize: '14px', opacity: 0.9' }}>
+        <div style={{ fontSize: '14px', opacity: 0.9}}>
           • Exporta regularmente para crear respaldos • Los archivos JSON mantienen toda la información • 
           Los templates son configuraciones optimizadas • Puedes compartir configuraciones entre cuentas
         </div>
