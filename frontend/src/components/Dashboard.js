@@ -509,6 +509,7 @@ const Dashboard = ({ user, supabase }) => {
       )}
       {/* GRÁFICOS INTERACTIVOS AVANZADOS */}
       <ChartSection dashboardData={dashboardData} />
+      
       {/* SISTEMA DE IMPORTACIÓN/EXPORTACIÓN */}
       <ImportExport user={user} supabase={supabase} onDataChange={loadAllData} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
