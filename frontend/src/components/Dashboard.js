@@ -517,9 +517,14 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
       <ImportExport user={user} supabase={supabase} onDataChange={loadAllData} />
       {/* MOTOR DE BACKTESTING AVANZADO */}
       {/* MOTOR DE BACKTESTING AVANZADO */}
-      <BacktestingEngine user={user} supabase={supabase} onResults={(results) => {
-        console.log('Resultados de Backtesting:', results);
-      }} />  
+      <BacktestingEngine 
+        user={user} 
+        supabase={supabase} 
+        onResults={(results) => {
+          console.log('📊 Resultados recibidos del backtesting:', results);
+          setBacktestResults(results); // ← ESTA LÍNEA ES CLAVE
+        }} 
+      />
       {/* SISTEMA DE IA Y RECOMENDACIONES INTELIGENTES */}
       <AIRecommendationEngine 
         user={user} 

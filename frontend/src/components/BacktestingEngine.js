@@ -520,7 +520,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
                   {results.filter(r => parseFloat(r.sharpeRatio) > 1).length}
                 </div>
-                <div style={{ fontSize: '14px', opacity: 0.9 }}>Estrategias con Sharpe > 1.0</div>
+                <div style={{ fontSize: '14px', opacity: 0.9 }}>Estrategias con Sharpe &gt; 1.0 </div>
               </div>
               <div>
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
