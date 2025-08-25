@@ -224,7 +224,7 @@ const ImportExport = ({ user, supabase, onDataChange }) => {
           atr_periodo_min: 5,
           atr_periodo_max: 10,
           global_indicador_min: 10,
-          global_indicador_max: 50
+          global_indicador_max: 50,
         },
         'swing_crypto': {
           nombre_base: 'Swing_CRYPTO_Master',
@@ -236,7 +236,7 @@ const ImportExport = ({ user, supabase, onDataChange }) => {
           tecnicas_simulaciones: { 'MC Trade': 800, 'High Back Test Precision': 300 },
           atr_based: false,
           global_indicador_min: 50,
-          global_indicador_max: 200
+          global_indicador_max: 200,
         },
         'conservative_gold': {
           nombre_base: 'Conservative_GOLD_Safe',
@@ -248,7 +248,7 @@ const ImportExport = ({ user, supabase, onDataChange }) => {
           tecnicas_simulaciones: { 'MC Lento': 600, 'Secuencial': 400 },
           atr_based: true,
           atr_multiplicador_min: 2.0,
-          atr_multiplicador_max: 4.0
+          atr_multiplicador_max: 4.0,
         }
       };
 
