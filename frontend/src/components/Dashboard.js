@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ChartSection from './ChartSection';
 import ImportExport from './ImportExport';
 
-const Dashboard = ({ user, supabase }) => {
+const Dashboard = ({ user, supabase, loadAllData }) => {
   const [dashboardData, setDashboardData] = useState({
     totalBots: 0,
     activeBots: 0,
