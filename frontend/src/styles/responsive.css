@@ -1,0 +1,256 @@
+/* ===== RESPONSIVE STYLES & PWA OPTIMIZATION ===== */
+
+/* Variables CSS para temas */
+:root {
+  --primary-color: #667eea;
+  --secondary-color: #764ba2;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --info-color: #17a2b8;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  --transition: all 0.3s ease;
+}
+
+/* Light Theme */
+.light-theme {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #dee2e6;
+}
+
+/* Dark Theme */
+.dark-theme {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --border-color: #404040;
+  --primary-color: #8b5cf6;
+  --secondary-color: #a855f7;
+}
+
+/* Base styles */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: var(--transition);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* ===== MOBILE FIRST RESPONSIVE ===== */
+
+/* Small devices (landscape phones, 576px and up) */
+@media (max-width: 575.98px) {
+  .dashboard-container {
+    padding: 10px !important;
+  }
+  
+  .dashboard-header {
+    padding: 15px 10px !important;
+    text-align: center;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.5rem !important;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  
+  .kpi-card {
+    padding: 15px 10px !important;
+    text-align: center;
+  }
+  
+  .kpi-card h3 {
+    font-size: 1.2rem !important;
+  }
+  
+  .kpi-card .kpi-value {
+    font-size: 1.8rem !important;
+  }
+  
+  .chart-container {
+    margin: 15px 0 !important;
+    padding: 15px !important;
+  }
+  
+  .chart-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+  
+  .backtesting-table {
+    font-size: 12px !important;
+  }
+  
+  .backtesting-table th,
+  .backtesting-table td {
+    padding: 8px 4px !important;
+  }
+  
+  .import-export-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+  
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  button {
+    min-height: 44px; /* Apple recommendation for touch targets */
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 576px) and (max-width: 767.98px) {
+  .dashboard-container {
+    padding: 15px !important;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 15px !important;
+  }
+  
+  .chart-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  
+  .import-export-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+  }
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px !important;
+  }
+  
+  .chart-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 25px !important;
+  }
+}
+
+/* Extra large devices (large desktops, 1200px and up) */
+@media (min-width: 992px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  
+  .chart-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ===== PWA SPECIFIC STYLES ===== */
+
+/* Safe area for devices with notches */
+.dashboard-container {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Improved touch targets */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, transparent 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Focus states for accessibility */
+button:focus,
+input:focus,
+select:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ===== DARK MODE SPECIFIC ADJUSTMENTS ===== */
+
+.dark-theme .chart-container {
+  background-color: var(--bg-secondary) !important;
+}
+
+.dark-theme .kpi-card {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color);
+}
+
+.dark-theme input,
+.dark-theme select {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.dark-theme table {
+  background-color: var(--bg-secondary);
+}
+
+.dark-theme th {
+  background-color: var(--bg-primary) !important;
+}
+
+/* ===== PERFORMANCE OPTIMIZATIONS ===== */
+
+/* GPU acceleration for smooth animations */
+.animated-element {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
