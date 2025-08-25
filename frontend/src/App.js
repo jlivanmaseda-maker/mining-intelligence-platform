@@ -647,7 +647,7 @@ function App() {
                       className="touch-target"
                       style={{
                         padding: '10px 20px',
-                        background: 'var(--danger-color)',
+                        background: creating ? 'var(--text-secondary)' : 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', // ← NUEVO COLOR AZUL
                         color: 'white',
                         border: 'none',
                         borderRadius: '5px',
