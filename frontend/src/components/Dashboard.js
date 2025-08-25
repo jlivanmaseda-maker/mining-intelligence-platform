@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ChartSection from './ChartSection';
 import ImportExport from './ImportExport';
+import BacktestingEngine from './BacktestingEngine';
 
 const Dashboard = ({ user, supabase, loadAllData }) => {
   const [dashboardData, setDashboardData] = useState({
@@ -512,6 +513,11 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
       
       {/* SISTEMA DE IMPORTACIÓN/EXPORTACIÓN */}
       <ImportExport user={user} supabase={supabase} onDataChange={loadAllData} />
+      {/* MOTOR DE BACKTESTING AVANZADO */}
+      <BacktestingEngine user={user} supabase={supabase} onResults={(results) => {
+        console.log('Resultados de Backtesting:', results);
+        // Aquí podrías actualizar las métricas del Dashboard con datos reales
+      }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
         {/* Top Técnicas */}
