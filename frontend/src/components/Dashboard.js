@@ -515,14 +515,9 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
       <ImportExport user={user} supabase={supabase} onDataChange={loadAllData} />
       {/* MOTOR DE BACKTESTING AVANZADO */}
       {/* MOTOR DE BACKTESTING AVANZADO */}
-      <BacktestingEngine 
-        user={user} 
-        supabase={supabase} 
-        onResults={(results) => {
-          console.log('Resultados de Backtesting:', results);
-          // Los resultados se mostrarán en la interfaz del componente
-        }} 
-      />  
+      <BacktestingEngine user={user} supabase={supabase} onResults={(results) => {
+        console.log('Resultados de Backtesting:', results);
+      }} />  
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
         {/* Top Técnicas */}

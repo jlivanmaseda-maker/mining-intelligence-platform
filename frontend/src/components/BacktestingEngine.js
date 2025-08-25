@@ -5,22 +5,74 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
 
+  // 📊 FUNCIÓN AUXILIAR - PARÁMETROS DE ESTRATEGIA
+  const getStrategyParams = (tecnicas) => {
+    const mainTechnique = Object.keys(tecnicas)[0] || 'SPP';
+    
+    const params = {
+      'SPP': {
+        entryThreshold: 0.002,
+        exitThreshold: 0.005,
+        riskMultiplier: 1.0
+      },
+      'WFM': {
+        entryThreshold: 0.0015,
+        exitThreshold: 0.008,
+        riskMultiplier: 1.2
+      },
+      'MC Trade': {
+        entryThreshold: 0.003,
+        exitThreshold: 0.004,
+        riskMultiplier: 0.8
+      },
+      'MC Lento': {
+        entryThreshold: 0.001,
+        exitThreshold: 0.010,
+        riskMultiplier: 1.5
+      },
+      'Secuencial': {
+        entryThreshold: 0.0025,
+        exitThreshold: 0.006,
+        riskMultiplier: 1.1
+      },
+      'High Back Test Precision': {
+        entryThreshold: 0.0005,
+        exitThreshold: 0.012,
+        riskMultiplier: 2.0
+      }
+    };
+
+    return params[mainTechnique] || params['SPP'];
+  };
+
+  // 🔧 FUNCIÓN AUXILIAR - P&L NO REALIZADO
+  const calculateUnrealizedPnL = (position, currentPrice) => {
+    if (!position) return 0;
+    const priceChange = (currentPrice - position.entryPrice) / position.entryPrice;
+    const multiplier = position.type === 'LONG' ? 1 : -1;
+    return position.size * priceChange * multiplier;
+  };
+
   // 📈 GENERADOR DE DATOS HISTÓRICOS SINTÉTICOS
   const generateHistoricalData = (symbol, days = 365) => {
     const data = [];
-    let price = getBasePrice(symbol); // Precio base por activo
-    const volatility = getVolatility(symbol); // Volatilidad por activo
+    let price = getBasePrice(symbol);
+    const volatility = getVolatility(symbol);
     
-    for (let i = 0; i < days * 24; i++) { // Datos horarios
+    for (let i = 0; i < days * 24; i++) {
       const randomChange = (Math.random() - 0.5) * volatility;
       price = price * (1 + randomChange);
       
       const timestamp = Date.now() - (days * 24 - i) * 3600000;
+      const open = price * (1 + (Math.random() - 0.5) * 0.001);
+      const high = price * (1 + Math.random() * 0.005);
+      const low = price * (1 - Math.random() * 0.005);
+      
       data.push({
         timestamp,
-        open: price * (1 + (Math.random() - 0.5) * 0.001),
-        high: price * (1 + Math.random() * 0.005),
-        low: price * (1 - Math.random() * 0.005),
+        open,
+        high,
+        low,
         close: price,
         volume: Math.random() * 1000000
       });
@@ -46,13 +98,13 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
   // 📊 VOLATILIDAD POR ACTIVO
   const getVolatility = (symbol) => {
     const volatilities = {
-      'EURUSD': 0.008,  // 0.8% por hora
-      'GBPUSD': 0.010,  // 1.0% por hora
-      'USDJPY': 0.009,  // 0.9% por hora
-      'GOLD': 0.015,    // 1.5% por hora
-      'BTC': 0.040,     // 4.0% por hora
-      'ETH': 0.045,     // 4.5% por hora
-      'SPX500': 0.012   // 1.2% por hora
+      'EURUSD': 0.008,
+      'GBPUSD': 0.010,
+      'USDJPY': 0.009,
+      'GOLD': 0.015,
+      'BTC': 0.040,
+      'ETH': 0.045,
+      'SPX500': 0.012
     };
     return volatilities[symbol] || 0.010;
   };
@@ -60,24 +112,22 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
   // 🤖 SIMULADOR DE ESTRATEGIA
   const simulateStrategy = (config, historicalData) => {
     const trades = [];
-    let balance = 10000; // Capital inicial
+    let balance = 10000;
     let equity = [{ timestamp: historicalData[0].timestamp, balance }];
     let position = null;
     
-    // Parámetros de la estrategia basados en técnicas
     const strategyParams = getStrategyParams(config.tecnicas_simulaciones);
     
     for (let i = 1; i < historicalData.length; i++) {
       const current = historicalData[i];
       const previous = historicalData[i - 1];
       
-      // 🎯 LÓGICA DE ENTRADA
       if (!position && shouldEnter(current, previous, strategyParams, config)) {
         const entryPrice = current.close;
         const positionSize = calculatePositionSize(balance, config);
         
         position = {
-          type: Math.random() > 0.5 ? 'LONG' : 'SHORT', // Simplificado
+          type: Math.random() > 0.5 ? 'LONG' : 'SHORT',
           entryPrice,
           entryTime: current.timestamp,
           size: positionSize,
@@ -85,7 +135,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         };
       }
       
-      // 🎯 LÓGICA DE SALIDA
       if (position && shouldExit(current, previous, position, strategyParams)) {
         const exitPrice = current.close;
         const pnl = calculatePnL(position, exitPrice);
@@ -104,8 +153,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         position = null;
       }
       
-      // Actualizar equity curve
-      const currentEquity = balance + (position ? calculateUnrealizedPnL(position, current.close) : 0);
+      const currentEquity = balance + calculateUnrealizedPnL(position, current.close);
       equity.push({ 
         timestamp: current.timestamp, 
         balance: currentEquity 
@@ -120,11 +168,10 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
     const priceChange = (current.close - previous.close) / previous.close;
     const volumeSpike = current.volume > previous.volume * 1.5;
     
-    // Diferentes probabilidades según técnica dominante
     const mainTechnique = Object.keys(config.tecnicas_simulaciones)[0];
     const entryProbability = getTechniqueEntryProbability(mainTechnique);
     
-    return Math.random() < entryProbability && (Math.abs(priceChange) > 0.001 || volumeSpike);
+    return Math.random() < entryProbability && (Math.abs(priceChange) > params.entryThreshold || volumeSpike);
   };
 
   // 🎯 LÓGICA DE SALIDA
@@ -132,13 +179,11 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
     const holdTime = current.timestamp - position.entryTime;
     const priceChange = (current.close - position.entryPrice) / position.entryPrice;
     
-    // Salir por tiempo (4-24 horas)
     const maxHoldTime = (4 + Math.random() * 20) * 3600000;
     if (holdTime > maxHoldTime) return true;
     
-    // Salir por profit target o stop loss
-    const profitTarget = 0.005 + Math.random() * 0.010; // 0.5% - 1.5%
-    const stopLoss = -0.003 - Math.random() * 0.007;    // -0.3% - -1.0%
+    const profitTarget = params.exitThreshold;
+    const stopLoss = -params.exitThreshold * 0.6;
     
     if (position.type === 'LONG') {
       return priceChange > profitTarget || priceChange < stopLoss;
@@ -149,7 +194,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
 
   // 💼 CÁLCULO DE TAMAÑO DE POSICIÓN
   const calculatePositionSize = (balance, config) => {
-    const riskPerTrade = 0.02; // 2% de riesgo por trade
+    const riskPerTrade = 0.02;
     return balance * riskPerTrade;
   };
 
@@ -163,12 +208,12 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
   // 📊 PROBABILIDADES POR TÉCNICA
   const getTechniqueEntryProbability = (technique) => {
     const probabilities = {
-      'SPP': 0.15,                          // 15% probabilidad por hora
-      'WFM': 0.12,                          // 12% probabilidad
-      'MC Trade': 0.20,                     // 20% probabilidad
-      'MC Lento': 0.08,                     // 8% probabilidad
-      'Secuencial': 0.10,                   // 10% probabilidad
-      'High Back Test Precision': 0.05      // 5% probabilidad (más selectiva)
+      'SPP': 0.15,
+      'WFM': 0.12,
+      'MC Trade': 0.20,
+      'MC Lento': 0.08,
+      'Secuencial': 0.10,
+      'High Back Test Precision': 0.05
     };
     return probabilities[technique] || 0.10;
   };
@@ -176,7 +221,10 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
   // 🎲 TÉCNICA ALEATORIA PONDERADA
   const getRandomTechnique = (techniques) => {
     const techniqueNames = Object.keys(techniques);
+    if (techniqueNames.length === 0) return 'SPP';
+    
     const totalSims = Object.values(techniques).reduce((sum, val) => sum + val, 0);
+    if (totalSims === 0) return techniqueNames[0];
     
     let random = Math.random() * totalSims;
     
@@ -197,20 +245,19 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         profitFactor: 0,
         maxDrawdown: 0,
         sharpeRatio: 0,
-        avgWinLoss: 0
+        avgWinLoss: 0,
+        totalReturn: 0
       };
     }
 
-    // Win Rate
     const winningTrades = trades.filter(t => t.isWin);
     const winRate = (winningTrades.length / trades.length) * 100;
 
-    // Profit Factor
     const totalWins = winningTrades.reduce((sum, t) => sum + t.pnl, 0);
-    const totalLosses = Math.abs(trades.filter(t => !t.isWin).reduce((sum, t) => sum + t.pnl, 0));
+    const losingTrades = trades.filter(t => !t.isWin);
+    const totalLosses = Math.abs(losingTrades.reduce((sum, t) => sum + t.pnl, 0));
     const profitFactor = totalLosses > 0 ? totalWins / totalLosses : totalWins > 0 ? 999 : 0;
 
-    // Maximum Drawdown
     let maxDrawdown = 0;
     let peak = equity[0].balance;
     
@@ -220,15 +267,20 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
 
-    // Sharpe Ratio (simplificado)
     const returns = equity.slice(1).map((point, i) => 
       (point.balance - equity[i].balance) / equity[i].balance
     );
-    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const returnStd = Math.sqrt(
+    const avgReturn = returns.length > 0 ? returns.reduce((sum, r) => sum + r, 0) / returns.length : 0;
+    const returnStd = returns.length > 1 ? Math.sqrt(
       returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
-    );
+    ) : 0;
     const sharpeRatio = returnStd > 0 ? avgReturn / returnStd : 0;
+
+    const avgWin = winningTrades.length > 0 ? totalWins / winningTrades.length : 0;
+    const avgLoss = losingTrades.length > 0 ? totalLosses / losingTrades.length : 1;
+    const avgWinLoss = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? 999 : 0;
+
+    const totalReturn = equity.length > 1 ? ((equity[equity.length - 1].balance / equity[0].balance - 1) * 100) : 0;
 
     return {
       winRate: winRate.toFixed(1),
@@ -236,8 +288,8 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
       profitFactor: profitFactor.toFixed(2),
       maxDrawdown: (maxDrawdown * 100).toFixed(1),
       sharpeRatio: sharpeRatio.toFixed(2),
-      avgWinLoss: (totalWins / winningTrades.length / Math.abs(totalLosses / (trades.length - winningTrades.length))).toFixed(2),
-      totalReturn: ((equity[equity.length - 1].balance / equity[0].balance - 1) * 100).toFixed(1)
+      avgWinLoss: avgWinLoss.toFixed(2),
+      totalReturn: totalReturn.toFixed(1)
     };
   };
 
@@ -253,7 +305,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
     setResults(null);
 
     try {
-      // Obtener configuraciones a testear
       let { data: configs, error } = await supabase
         .from('bot_configurations')
         .select('*')
@@ -272,18 +323,12 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
 
       const backtestResults = [];
 
-      // Ejecutar backtesting para cada configuración
       for (let i = 0; i < configs.length; i++) {
         const config = configs[i];
         setProgress(((i + 1) / configs.length) * 100);
 
-        // Generar datos históricos para el activo
-        const historicalData = generateHistoricalData(config.activo, 90); // 90 días
-
-        // Simular la estrategia
+        const historicalData = generateHistoricalData(config.activo, 90);
         const simulation = simulateStrategy(config, historicalData);
-
-        // Calcular métricas
         const metrics = calculateMetrics(simulation.trades, simulation.equity);
 
         backtestResults.push({
@@ -298,13 +343,10 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
           executionTime: new Date().toISOString()
         });
 
-        // Simular delay de procesamiento
         await new Promise(resolve => setTimeout(resolve, 200));
       }
 
-      // Ordenar resultados por Sharpe Ratio
       backtestResults.sort((a, b) => parseFloat(b.sharpeRatio) - parseFloat(a.sharpeRatio));
-
       setResults(backtestResults);
 
       if (onResults) {
@@ -328,7 +370,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
       marginTop: '30px'
     }}>
       
-      {/* HEADER */}
       <h2 style={{ 
         margin: '0 0 30px 0', 
         color: '#333', 
@@ -338,7 +379,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         🧪 Motor de Backtesting Avanzado
       </h2>
 
-      {/* CONTROLES */}
       <div style={{
         display: 'flex',
         gap: '15px',
@@ -366,7 +406,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         </button>
       </div>
 
-      {/* BARRA DE PROGRESO */}
       {isRunning && (
         <div style={{
           width: '100%',
@@ -385,14 +424,12 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         </div>
       )}
 
-      {/* RESULTADOS */}
       {results && (
         <div>
           <h3 style={{ color: '#28a745', marginBottom: '20px' }}>
             📊 Resultados de Backtesting ({results.length} configuraciones analizadas)
           </h3>
           
-          {/* TABLA DE RESULTADOS */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ 
               width: '100%', 
@@ -470,7 +507,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
             </table>
           </div>
 
-          {/* RESUMEN EJECUTIVO */}
           <div style={{
             marginTop: '30px',
             padding: '20px',
@@ -509,7 +545,6 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         </div>
       )}
 
-      {/* INFORMACIÓN */}
       {!results && !isRunning && (
         <div style={{
           textAlign: 'center',
