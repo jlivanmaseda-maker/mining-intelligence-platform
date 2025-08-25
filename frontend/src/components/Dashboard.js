@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import ChartSection from './ChartSection';
 import ImportExport from './ImportExport';
 import BacktestingEngine from './BacktestingEngine';
+import AIRecommendationEngine from './AIRecommendationEngine';
+
 
 const Dashboard = ({ user, supabase, loadAllData }) => {
   const [dashboardData, setDashboardData] = useState({
@@ -19,7 +21,7 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
   const [selectedDateRange, setSelectedDateRange] = useState('7d');
   const [selectedTechnique, setSelectedTechnique] = useState('all');
   const [selectedAsset, setSelectedAsset] = useState('all');
-
+  const [backtestResults, setBacktestResults] = useState([]);
   // Cargar datos del dashboard
   useEffect(() => {
     if (user) {
@@ -518,6 +520,13 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
       <BacktestingEngine user={user} supabase={supabase} onResults={(results) => {
         console.log('Resultados de Backtesting:', results);
       }} />  
+      {/* SISTEMA DE IA Y RECOMENDACIONES INTELIGENTES */}
+      <AIRecommendationEngine 
+        user={user} 
+        supabase={supabase} 
+        backtestResults={backtestResults} // ← Usar los resultados del backtesting
+        userBots={dashboardData?.userBots || []} // ← Pasar los bots del usuario
+      />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
         {/* Top Técnicas */}
