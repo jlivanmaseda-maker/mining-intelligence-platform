@@ -3,7 +3,7 @@ import ChartSection from './ChartSection';
 import ImportExport from './ImportExport';
 import BacktestingEngine from './BacktestingEngine';
 import AIRecommendationEngine from './AIRecommendationEngine';
-
+import DashboardGlobal from './DashboardGlobal';
 
 const Dashboard = ({ user, supabase, loadAllData }) => {
   const [dashboardData, setDashboardData] = useState({
@@ -531,6 +531,12 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
         supabase={supabase} 
         backtestResults={backtestResults} // ← Usar los resultados del backtesting
         userBots={dashboardData?.userBots || []} // ← Pasar los bots del usuario
+      />
+      {/* DASHBOARD GLOBAL - BENCHMARKING MUNDIAL */}
+      <DashboardGlobal 
+        user={user} 
+        supabase={supabase} 
+        serStats={aiInsights} // Pasar datos del análisis IA
       />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
