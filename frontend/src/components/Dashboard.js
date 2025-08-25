@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ChartSection from './ChartSection';
 
 const Dashboard = ({ user, supabase }) => {
   const [dashboardData, setDashboardData] = useState({
@@ -505,7 +506,8 @@ const Dashboard = ({ user, supabase }) => {
           </div>
         </div>
       )}
-
+      {/* GRÁFICOS INTERACTIVOS AVANZADOS */}
+      <ChartSection dashboardData={dashboardData} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
         {/* Top Técnicas */}
