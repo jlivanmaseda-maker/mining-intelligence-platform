@@ -22,6 +22,7 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
   const [selectedTechnique, setSelectedTechnique] = useState('all');
   const [selectedAsset, setSelectedAsset] = useState('all');
   const [backtestResults, setBacktestResults] = useState([]);
+  const [aiInsights, setAiInsights] = useState(null);
   // Cargar datos del dashboard
   useEffect(() => {
     if (user) {
