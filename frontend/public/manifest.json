@@ -1,30 +1,9 @@
 {
   "short_name": "Mining Intelligence",
-  "name": "Mining Intelligence - Trading Algorítmico",
-  "description": "Plataforma profesional de trading algorítmico con dashboard analytics y backtesting avanzado",
-  "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "logo192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    }
-  ],
+  "name": "Mining Intelligence Platform - Trading Algorítmico con IA",
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#667eea",
+  "theme_color": "#6366f1",
   "background_color": "#ffffff",
-  "orientation": "portrait-primary",
-  "scope": "/",
-  "categories": ["finance", "productivity", "business"],
-  "lang": "es-ES"
+  "orientation": "portrait"
 }
