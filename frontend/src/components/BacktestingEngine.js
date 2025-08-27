@@ -293,6 +293,47 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
     };
   };
 
+  // 📥 IMPORTAR RESULTADOS A BOT MANAGER
+  const handleImportToBotManager = async () => {
+    if (!results || results.length === 0) {
+      alert('No hay resultados para importar');
+      return;
+    }
+
+    const monthBatch = new Date().toISOString().slice(0, 7); // "2025-08"
+    
+    try {
+      const botsToInsert = results.map(result => ({
+        name: result.configName || `Bot_${Date.now()}`,
+        config_name: result.configName,
+        created_date: new Date().toISOString().split('T')[0],
+        month_batch: monthBatch,
+        activo: result.activo || 'EURUSD',
+        temporalidad: result.temporalidad || 'M15',
+        tecnicas: result.tecnicas || {},
+        sharpe_ratio: parseFloat(result.sharpeRatio || 0),
+        win_rate: parseFloat(result.winRate || 0),
+        profit_factor: parseFloat(result.profitFactor || 1),
+        max_drawdown: parseFloat(result.maxDrawdown || 0),
+        total_trades: parseInt(result.totalTrades || 0),
+        total_return: parseFloat(result.totalReturn || 0),
+        status: 'pending',
+        user_id: user.id
+      }));
+
+      const { error } = await supabase
+        .from('bots')
+        .insert(botsToInsert);
+
+      if (error) throw error;
+
+      alert(`✅ ${botsToInsert.length} bots importados exitosamente a Gestión de Bots`);
+    } catch (error) {
+      console.error('Error importando bots:', error);
+      alert('Error importando bots: ' + error.message);
+    }
+  };
+
   // 🚀 EJECUTAR BACKTESTING
   const runBacktest = async (configId = null) => {
     if (!user) {
@@ -541,6 +582,38 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
                 <div style={{ fontSize: '14px', opacity: 0.9 }}>Mejor Estrategia (por Sharpe)</div>
               </div>
             </div>
+          </div>
+
+          {/* BOTÓN PARA IMPORTAR A BOT MANAGER */}
+          <div style={{
+            marginTop: '25px',
+            textAlign: 'center'
+          }}>
+            <button
+              onClick={handleImportToBotManager}
+              style={{
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                minWidth: '250px'
+              }}
+            >
+              📥 Importar {results.length} Bots a Gestión
+            </button>
+            <p style={{ 
+              marginTop: '10px', 
+              fontSize: '14px', 
+              color: '#666',
+              fontStyle: 'italic'
+            }}>
+              Los bots se marcarán como "pendientes" para revisión manual
+            </p>
           </div>
         </div>
       )}

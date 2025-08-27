@@ -4,6 +4,7 @@ import ImportExport from './ImportExport';
 import BacktestingEngine from './BacktestingEngine';
 import AIRecommendationEngine from './AIRecommendationEngine';
 import DashboardGlobal from './DashboardGlobal';
+import BotManager from './BotManager';
 
 const Dashboard = ({ user, supabase, loadAllData }) => {
   const [dashboardData, setDashboardData] = useState({
@@ -538,6 +539,12 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
         user={user} 
         supabase={supabase} 
         serStats={aiInsights} // Pasar datos del análisis IA
+      />
+
+      {/* GESTIÓN AVANZADA DE BOTS DE TRADING */}
+      <BotManager 
+        user={user} 
+        supabase={supabase} 
       />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
         
