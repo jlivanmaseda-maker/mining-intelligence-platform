@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ChartSection from './ChartSection';
 import ImportExport from './ImportExport';
 import BacktestingEngine from './BacktestingEngine';
-import AIRecommendationEngine from './AIRecommendationEngine';
+import RealAIAnalysis from './RealAIAnalysis'; 
 import DashboardGlobal from './DashboardGlobal';
 import BotManager from './BotManager';
 
@@ -528,11 +528,12 @@ const Dashboard = ({ user, supabase, loadAllData }) => {
         }} 
       />
       {/* SISTEMA DE IA Y RECOMENDACIONES INTELIGENTES */}
-      <AIRecommendationEngine 
+      <RealAIAnalysis 
         user={user} 
         supabase={supabase} 
-        backtestResults={backtestResults} // ← Usar los resultados del backtesting
-        userBots={dashboardData?.userBots || []} // ← Pasar los bots del usuario
+        onInsightsGenerated={(insights) => {
+         setAiInsights(insights);
+        }}
       />
       {/* DASHBOARD GLOBAL - BENCHMARKING MUNDIAL */}
       <DashboardGlobal 

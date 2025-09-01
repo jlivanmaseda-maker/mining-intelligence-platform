@@ -7,6 +7,8 @@ const BotManager = ({ user, supabase }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedBots, setSelectedBots] = useState([]); // ← NUEVO: Para selección múltiple
+  const [bulkActionLoading, setBulkActionLoading] = useState(false); // ← NUEVO: Loading acciones masivas
 
   // 📅 OBTENER MESES DISPONIBLES
   const getAvailableMonths = () => {
@@ -14,7 +16,7 @@ const BotManager = ({ user, supabase }) => {
     const currentDate = new Date();
     for (let i = 0; i < 12; i++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      months.push(date.toISOString().slice(0, 7)); // "2025-08"
+      months.push(date.toISOString().slice(0, 7)); // "2025-09"
     }
     return months;
   };
@@ -41,8 +43,13 @@ const BotManager = ({ user, supabase }) => {
       
       if (error) throw error;
       setBots(data || []);
+      
+      // Limpiar selección al recargar
+      setSelectedBots([]);
+      
     } catch (error) {
       console.error('Error cargando bots:', error);
+      alert('Error cargando bots: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -88,13 +95,17 @@ const BotManager = ({ user, supabase }) => {
       ));
 
       // Registrar en histórico
-      await supabase.from('bot_performance_history').insert({
-        bot_id: botId,
-        review_month: new Date().toISOString().slice(0, 7),
-        new_status: newStatus,
-        review_notes: notes,
-        reviewed_by: user.id
-      });
+      try {
+        await supabase.from('bot_performance_history').insert({
+          bot_id: botId,
+          review_month: new Date().toISOString().slice(0, 7),
+          new_status: newStatus,
+          review_notes: notes,
+          reviewed_by: user.id
+        });
+      } catch (historyError) {
+        console.warn('No se pudo registrar en histórico:', historyError);
+      }
 
     } catch (error) {
       console.error('Error marcando bot:', error);
@@ -102,7 +113,115 @@ const BotManager = ({ user, supabase }) => {
     }
   };
 
-  // 📥 IMPORTAR BOTS MASIVAMENTE
+  // 🗑️ ELIMINAR BOTS SELECCIONADOS (NUEVO)
+  const deleteBots = async (botIds = selectedBots) => {
+    if (!botIds || botIds.length === 0) {
+      alert('Selecciona bots para eliminar');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de eliminar ${botIds.length} bot(s)?\n\n` +
+      `Esta acción NO se puede deshacer.\n` +
+      `Se eliminarán permanentemente de la base de datos.`
+    );
+
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    try {
+      console.log('🗑️ Eliminando bots:', botIds);
+
+      const { error } = await supabase
+        .from('bots')
+        .delete()
+        .in('id', botIds);
+
+      if (error) throw error;
+
+      // Actualizar estado local
+      setBots(bots.filter(bot => !botIds.includes(bot.id)));
+      setSelectedBots([]);
+      
+      alert(`✅ ${botIds.length} bot(s) eliminado(s) exitosamente`);
+      
+      // Recargar estadísticas
+      await loadMonthlyStats();
+
+    } catch (error) {
+      console.error('Error eliminando bots:', error);
+      alert(`❌ Error eliminando bots: ${error.message}`);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // 🔄 MARCAR MÚLTIPLES BOTS (NUEVO)
+  const markMultipleBots = async (status) => {
+    if (selectedBots.length === 0) {
+      alert('Selecciona bots para marcar');
+      return;
+    }
+
+    const statusText = status === 'good' ? 'BUENOS' : 'MALOS';
+    const confirmed = window.confirm(
+      `¿Marcar ${selectedBots.length} bot(s) como ${statusText}?`
+    );
+
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    try {
+      const updates = selectedBots.map(botId => ({
+        id: botId,
+        status: status,
+        marked_by: user.id,
+        marked_date: new Date().toISOString(),
+        user_notes: `Marcado masivamente como ${statusText} el ${new Date().toLocaleDateString()}`
+      }));
+
+      const { error } = await supabase
+        .from('bots')
+        .upsert(updates);
+
+      if (error) throw error;
+
+      // Actualizar estado local
+      setBots(bots.map(bot => 
+        selectedBots.includes(bot.id)
+          ? { ...bot, status: status }
+          : bot
+      ));
+
+      setSelectedBots([]);
+      alert(`✅ ${selectedBots.length} bot(s) marcado(s) como ${statusText}`);
+
+    } catch (error) {
+      console.error('Error marcando bots masivamente:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // 🔄 FUNCIONES DE SELECCIÓN (NUEVAS)
+  const toggleSelectBot = (botId) => {
+    setSelectedBots(prev => 
+      prev.includes(botId) 
+        ? prev.filter(id => id !== botId)
+        : [...prev, botId]
+    );
+  };
+
+  const selectAllBots = () => {
+    setSelectedBots(bots.map(bot => bot.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedBots([]);
+  };
+
+  // 📥 IMPORTAR BOTS MASIVAMENTE (Mejorado para evitar duplicados)
   const importBotsFromBacktest = async (backtestResults, monthBatch) => {
     if (!backtestResults || backtestResults.length === 0) {
       alert('No hay resultados de backtesting para importar');
@@ -113,6 +232,8 @@ const BotManager = ({ user, supabase }) => {
       setLoading(true);
 
       const botsToInsert = backtestResults.map(result => ({
+        // Clave única para evitar duplicados
+        unique_key: `${result.configName}_${monthBatch}_${user.id}_${result.activo}`,
         name: result.configName || `Bot_${Date.now()}`,
         config_name: result.configName,
         created_date: new Date().toISOString().split('T')[0],
@@ -127,12 +248,16 @@ const BotManager = ({ user, supabase }) => {
         total_trades: parseInt(result.totalTrades || 0),
         total_return: parseFloat(result.totalReturn || 0),
         status: 'pending',
+        data_source: 'backtesting_simulado',
         user_id: user.id
       }));
 
+      // Usar UPSERT para evitar duplicados
       const { error } = await supabase
         .from('bots')
-        .insert(botsToInsert);
+        .upsert(botsToInsert, { 
+          onConflict: 'unique_key'
+        });
 
       if (error) throw error;
 
@@ -311,87 +436,6 @@ const BotManager = ({ user, supabase }) => {
               </div>
             ))}
           </div>
-
-          {/* LOTES MENSUALES */}
-          <div style={{
-            background: 'var(--bg-primary)',
-            padding: '25px',
-            borderRadius: '15px',
-            border: '1px solid var(--border-color)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', color: 'var(--text-primary)' }}>
-              📅 Lotes Mensuales
-            </h3>
-            
-            {monthlyBatches.length > 0 ? (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ 
-                  width: '100%', 
-                  borderCollapse: 'collapse',
-                  fontSize: '14px'
-                }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Mes</th>
-                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Total</th>
-                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Buenos</th>
-                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Malos</th>
-                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Pendientes</th>
-                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>% Éxito</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monthlyBatches.map((batch, index) => {
-                      const successRate = batch.total_bots > 0 
-                        ? ((batch.good_bots / batch.total_bots) * 100).toFixed(1)
-                        : '0.0';
-                      
-                      return (
-                        <tr key={index} style={{
-                          background: index % 2 === 0 ? 'var(--bg-secondary)' : 'transparent'
-                        }}>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                            {batch.batch_month}
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'center' }}>
-                            {batch.total_bots}
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'center', color: '#10b981' }}>
-                            {batch.good_bots}
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'center', color: '#ef4444' }}>
-                            {batch.bad_bots}
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'center', color: '#f59e0b' }}>
-                            {batch.pending_bots}
-                          </td>
-                          <td style={{ 
-                            padding: '12px', 
-                            textAlign: 'center',
-                            color: parseFloat(successRate) > 60 ? '#10b981' : 
-                                   parseFloat(successRate) > 40 ? '#f59e0b' : '#ef4444',
-                            fontWeight: 'bold'
-                          }}>
-                            {successRate}%
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{
-                textAlign: 'center',
-                padding: '40px',
-                color: 'var(--text-secondary)'
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }}>📅</div>
-                <p>No hay lotes mensuales registrados aún.</p>
-                <p>Importa tu primer lote de bots para comenzar.</p>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
@@ -448,6 +492,105 @@ const BotManager = ({ user, supabase }) => {
             </div>
           </div>
 
+          {/* CONTROLES DE SELECCIÓN MÚLTIPLE */}
+          {bots.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '10px',
+              marginBottom: '20px',
+              padding: '15px',
+              background: 'var(--bg-primary)',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  onClick={selectAllBots}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  Seleccionar Todo
+                </button>
+                <button
+                  onClick={clearSelection}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  Limpiar Selección
+                </button>
+              </div>
+
+              {selectedBots.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                    {selectedBots.length} seleccionado(s):
+                  </span>
+                  <button
+                    onClick={() => markMultipleBots('good')}
+                    disabled={bulkActionLoading}
+                    style={{
+                      padding: '6px 12px',
+                      background: bulkActionLoading ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: bulkActionLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    ✅ Marcar Buenos
+                  </button>
+                  <button
+                    onClick={() => markMultipleBots('bad')}
+                    disabled={bulkActionLoading}
+                    style={{
+                      padding: '6px 12px',
+                      background: bulkActionLoading ? '#9ca3af' : '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: bulkActionLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    ❌ Marcar Malos
+                  </button>
+                  <button
+                    onClick={() => deleteBots()}
+                    disabled={bulkActionLoading}
+                    style={{
+                      padding: '6px 12px',
+                      background: bulkActionLoading ? '#9ca3af' : '#dc2626',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: bulkActionLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    🗑️ Eliminar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* LISTA DE BOTS */}
           {bots.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
@@ -461,10 +604,18 @@ const BotManager = ({ user, supabase }) => {
               }}>
                 <thead>
                   <tr style={{ background: 'var(--primary-color)' }}>
+                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedBots.length === bots.length && bots.length > 0}
+                        onChange={() => selectedBots.length === bots.length ? clearSelection() : selectAllBots()}
+                        style={{ transform: 'scale(1.2)' }}
+                      />
+                    </th>
                     <th style={{ padding: '12px', textAlign: 'left', color: 'white' }}>Bot</th>
-                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Sharpe</th>
-                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Win Rate</th>
-                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Trades</th>
+                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Sharpe*</th>
+                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Win Rate*</th>
+                    <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Trades*</th>
                     <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Estado</th>
                     <th style={{ padding: '12px', textAlign: 'center', color: 'white' }}>Acciones</th>
                   </tr>
@@ -473,15 +624,27 @@ const BotManager = ({ user, supabase }) => {
                   {bots.map((bot, index) => (
                     <tr key={bot.id} style={{
                       borderBottom: '1px solid var(--border-color)',
-                      background: index % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)'
+                      background: index % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)',
+                      opacity: selectedBots.includes(bot.id) ? 0.8 : 1
                     }}>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedBots.includes(bot.id)}
+                          onChange={() => toggleSelectBot(bot.id)}
+                          style={{ transform: 'scale(1.1)' }}
+                        />
+                      </td>
                       <td style={{ padding: '12px' }}>
                         <div>
                           <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                            {bot.name?.substring(0, 30)}...
+                            {bot.name?.substring(0, 30) || 'Sin nombre'}...
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                             {bot.activo} • {bot.temporalidad} • {bot.month_batch}
+                            {bot.data_source === 'backtesting_simulado' && (
+                              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}> • Simulado</span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -491,7 +654,7 @@ const BotManager = ({ user, supabase }) => {
                         color: bot.sharpe_ratio > 1 ? '#10b981' : '#6b7280',
                         fontWeight: 'bold'
                       }}>
-                        {bot.sharpe_ratio?.toFixed(2) || '0.00'}
+                        {bot.sharpe_ratio?.toFixed(2) || 'N/A'}
                       </td>
                       <td style={{ 
                         padding: '12px', 
@@ -499,7 +662,7 @@ const BotManager = ({ user, supabase }) => {
                         color: bot.win_rate > 60 ? '#10b981' : '#6b7280',
                         fontWeight: 'bold'
                       }}>
-                        {bot.win_rate?.toFixed(1) || '0.0'}%
+                        {bot.win_rate?.toFixed(1) || 'N/A'}%
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         {bot.total_trades || 0}
@@ -551,12 +714,31 @@ const BotManager = ({ user, supabase }) => {
                               ❌ Malo
                             </button>
                           )}
+
+                          <button
+                            onClick={() => deleteBots([bot.id])}
+                            style={{
+                              padding: '4px 8px',
+                              background: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '10px', textAlign: 'center' }}>
+                * Métricas con asterisco provienen de backtesting simulado, no de trading real
+              </div>
             </div>
           ) : (
             <div style={{
@@ -592,53 +774,6 @@ const BotManager = ({ user, supabase }) => {
             Ejecuta primero el backtesting para generar bots, luego impórtalos aquí para su gestión.
           </p>
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ 
-              display: 'block', 
-              marginBottom: '8px', 
-              color: 'var(--text-primary)',
-              fontWeight: 'bold' 
-            }}>
-              Mes del lote:
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                background: 'var(--bg-secondary)',
-                color: 'var(--text-primary)',
-                fontSize: '16px'
-              }}
-            >
-              {getAvailableMonths().map(month => (
-                <option key={month} value={month}>{month}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={() => {
-              // Esta función se llamará desde el dashboard principal
-              alert('Ejecuta primero el backtesting, luego se habilitará la importación automática');
-            }}
-            disabled={loading}
-            style={{
-              padding: '15px 30px',
-              background: loading ? '#9ca3af' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '16px',
-              fontWeight: 'bold'
-            }}
-          >
-            {loading ? 'Importando...' : '📥 Importar desde Backtesting'}
-          </button>
-
           <div style={{
             marginTop: '25px',
             padding: '20px',
@@ -650,11 +785,12 @@ const BotManager = ({ user, supabase }) => {
               💡 Flujo de trabajo recomendado:
             </h4>
             <ol style={{ color: 'var(--text-secondary)', margin: 0, paddingLeft: '20px' }}>
-              <li>Ejecutar backtesting masivo (ej: 30 bots en julio)</li>
-              <li>Importar resultados a este gestor</li>
+              <li>Ejecutar backtesting masivo (ej: 30 bots en septiembre)</li>
+              <li>Usar botón "📥 Importar Bots a Gestión" en BacktestingEngine</li>
               <li>Revisar mensualmente y marcar bots buenos/malos</li>
               <li>Usar solo bots marcados como "buenos" en futuros análisis</li>
               <li>Sistema de IA excluirá automáticamente bots "malos"</li>
+              <li>✅ Sistema previene duplicados automáticamente</li>
             </ol>
           </div>
         </div>
@@ -683,6 +819,31 @@ const BotManager = ({ user, supabase }) => {
         </div>
       )}
 
+      {/* LOADING OVERLAY */}
+      {(loading || bulkActionLoading) && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '20px',
+            borderRadius: '10px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '10px' }}>🔄</div>
+            <div>{bulkActionLoading ? 'Procesando acción masiva...' : 'Cargando bots...'}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

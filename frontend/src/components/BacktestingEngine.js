@@ -236,17 +236,20 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
     return techniqueNames[0];
   };
 
-  // 📈 CÁLCULO DE MÉTRICAS REALES
+  // 📈 CÁLCULO DE MÉTRICAS REALES (MODIFICADO)
   const calculateMetrics = (trades, equity) => {
+    // ⚠️ NOTA IMPORTANTE: Estas son métricas de BACKTESTING simulado
+    // NO son métricas reales de trading en vivo
     if (trades.length === 0) {
       return {
-        winRate: 0,
+        winRate: 'Sin datos',
         totalTrades: 0,
-        profitFactor: 0,
-        maxDrawdown: 0,
-        sharpeRatio: 0,
-        avgWinLoss: 0,
-        totalReturn: 0
+        profitFactor: 'N/A',
+        maxDrawdown: 'N/A',
+        sharpeRatio: 'N/A',
+        avgWinLoss: 'N/A',
+        totalReturn: 'N/A',
+        dataType: 'Sin historial de backtesting'
       };
     }
 
@@ -289,48 +292,95 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
       maxDrawdown: (maxDrawdown * 100).toFixed(1),
       sharpeRatio: sharpeRatio.toFixed(2),
       avgWinLoss: avgWinLoss.toFixed(2),
-      totalReturn: totalReturn.toFixed(1)
+      totalReturn: totalReturn.toFixed(1),
+      dataType: 'Backtesting simulado (NO trading real)'
     };
   };
 
-  // 📥 IMPORTAR RESULTADOS A BOT MANAGER
+  // 📥 IMPORTAR RESULTADOS A BOT MANAGER (MODIFICADO - Evita duplicados)
   const handleImportToBotManager = async () => {
     if (!results || results.length === 0) {
       alert('No hay resultados para importar');
       return;
     }
 
-    const monthBatch = new Date().toISOString().slice(0, 7); // "2025-08"
+    const monthBatch = new Date().toISOString().slice(0, 7); // "2025-09"
     
     try {
-      const botsToInsert = results.map(result => ({
-        name: result.configName || `Bot_${Date.now()}`,
-        config_name: result.configName,
-        created_date: new Date().toISOString().split('T')[0],
-        month_batch: monthBatch,
-        activo: result.activo || 'EURUSD',
-        temporalidad: result.temporalidad || 'M15',
-        tecnicas: result.tecnicas || {},
-        sharpe_ratio: parseFloat(result.sharpeRatio || 0),
-        win_rate: parseFloat(result.winRate || 0),
-        profit_factor: parseFloat(result.profitFactor || 1),
-        max_drawdown: parseFloat(result.maxDrawdown || 0),
-        total_trades: parseInt(result.totalTrades || 0),
-        total_return: parseFloat(result.totalReturn || 0),
-        status: 'pending',
-        user_id: user.id
-      }));
+      console.log('🔄 Iniciando importación con prevención de duplicados...');
+      
+      const botsToInsert = results.map(result => {
+        // Crear ID único basado en configuración para evitar duplicados
+        const uniqueKey = `${result.configName}_${monthBatch}_${user.id}_${result.activo}_${result.temporalidad}`;
+        
+        return {
+          unique_key: uniqueKey,
+          name: result.configName || `Bot_${Date.now()}`,
+          config_name: result.configName,
+          created_date: new Date().toISOString().split('T')[0],
+          month_batch: monthBatch,
+          activo: result.activo || 'EURUSD',
+          temporalidad: result.temporalidad || 'M15',
+          tecnicas: result.tecnicas || {},
+          // ⚠️ NOTA: Estas métricas son de backtesting simulado, NO trading real
+          sharpe_ratio: parseFloat(result.sharpeRatio || 0),
+          win_rate: parseFloat(result.winRate || 0),
+          profit_factor: parseFloat(result.profitFactor || 1),
+          max_drawdown: parseFloat(result.maxDrawdown || 0),
+          total_trades: parseInt(result.totalTrades || 0),
+          total_return: parseFloat(result.totalReturn || 0),
+          status: 'pending',
+          user_id: user.id,
+          data_source: 'backtesting_simulado', // Indicador del tipo de datos
+          execution_time: result.executionTime
+        };
+      });
 
-      const { error } = await supabase
+      // ✅ USAR UPSERT para evitar duplicados
+      const { data, error } = await supabase
         .from('bots')
-        .insert(botsToInsert);
+        .upsert(botsToInsert, { 
+          onConflict: 'unique_key',
+          ignoreDuplicates: false // Actualizar si existe
+        });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error en UPSERT:', error);
+        throw error;
+      }
 
-      alert(`✅ ${botsToInsert.length} bots importados exitosamente a Gestión de Bots`);
+      console.log('✅ Importación exitosa:', data);
+
+      // Actualizar estadísticas del batch mensual
+      await updateMonthlyBatchStats(monthBatch, botsToInsert.length);
+
+      alert(`✅ ${botsToInsert.length} bots procesados exitosamente\n` +
+            `📊 Duplicados actualizados, nuevos insertados\n` +
+            `⚠️ Nota: Métricas de backtesting simulado, no trading real`);
+
     } catch (error) {
       console.error('Error importando bots:', error);
-      alert('Error importando bots: ' + error.message);
+      alert(`❌ Error importando bots: ${error.message}\n\n` +
+            `💡 Sugerencia: Verifica que la tabla 'bots' tenga la columna 'unique_key'`);
+    }
+  };
+
+  // 📊 ACTUALIZAR ESTADÍSTICAS MENSUALES
+  const updateMonthlyBatchStats = async (monthBatch, botCount) => {
+    try {
+      await supabase
+        .from('monthly_bot_batches')
+        .upsert({
+          batch_month: monthBatch,
+          total_bots: botCount,
+          pending_bots: botCount,
+          user_id: user.id,
+          last_updated: new Date().toISOString()
+        }, {
+          onConflict: 'batch_month,user_id'
+        });
+    } catch (error) {
+      console.warn('No se pudieron actualizar estadísticas mensuales:', error);
     }
   };
 
@@ -362,6 +412,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         return;
       }
 
+      console.log(`🧪 Iniciando backtesting de ${configs.length} configuraciones...`);
       const backtestResults = [];
 
       for (let i = 0; i < configs.length; i++) {
@@ -374,7 +425,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
 
         backtestResults.push({
           configId: config.id,
-          configName: config.nombre_completo,
+          configName: config.nombre_completo || config.nombre_base,
           activo: config.activo,
           temporalidad: config.temporalidad,
           tecnicas: config.tecnicas_simulaciones,
@@ -384,19 +435,24 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
           executionTime: new Date().toISOString()
         });
 
+        // Pequeña pausa para no saturar
         await new Promise(resolve => setTimeout(resolve, 200));
       }
 
+      // Ordenar por Sharpe Ratio (mejor a peor)
       backtestResults.sort((a, b) => parseFloat(b.sharpeRatio) - parseFloat(a.sharpeRatio));
       setResults(backtestResults);
 
+      console.log('✅ Backtesting completado:', backtestResults.length, 'resultados');
+
+      // Notificar al Dashboard padre
       if (onResults) {
         onResults(backtestResults);
       }
 
     } catch (error) {
       console.error('Error ejecutando backtesting:', error);
-      alert('Error ejecutando backtesting: ' + error.message);
+      alert(`❌ Error ejecutando backtesting: ${error.message}`);
     } finally {
       setIsRunning(false);
     }
@@ -419,6 +475,24 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
       }}>
         🧪 Motor de Backtesting Avanzado
       </h2>
+
+      {/* ⚠️ AVISO IMPORTANTE */}
+      <div style={{
+        background: 'rgba(59, 130, 246, 0.1)',
+        border: '1px solid #3b82f6',
+        borderRadius: '8px',
+        padding: '15px',
+        marginBottom: '20px',
+        textAlign: 'center'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#3b82f6' }}>
+          ⚠️ Importante: Métricas de Backtesting Simulado
+        </h4>
+        <p style={{ margin: '0', fontSize: '14px', color: '#1e40af' }}>
+          Las métricas mostradas son resultado de <strong>simulaciones históricas</strong>, 
+          NO reflejan performance real de trading en vivo.
+        </p>
+      </div>
 
       <div style={{
         display: 'flex',
@@ -471,6 +545,21 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
             📊 Resultados de Backtesting ({results.length} configuraciones analizadas)
           </h3>
           
+          {/* ⚠️ Aviso sobre tipo de datos */}
+          <div style={{
+            background: 'rgba(255, 193, 7, 0.1)',
+            border: '1px solid #ffc107',
+            borderRadius: '6px',
+            padding: '10px',
+            marginBottom: '20px',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            <strong>📊 Datos de Backtesting Simulado:</strong> Estas métricas provienen de simulaciones históricas 
+            con datos sintéticos. Para obtener métricas reales, marca los bots como "buenos/malos" 
+            basándote en su performance real de trading.
+          </div>
+          
           <div style={{ overflowX: 'auto' }}>
             <table style={{ 
               width: '100%', 
@@ -480,12 +569,12 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
               <thead>
                 <tr style={{ background: '#f8f9fa' }}>
                   <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Configuración</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Win Rate</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Trades</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Profit Factor</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Sharpe Ratio</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Max DD</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Retorno Total</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Win Rate*</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Trades*</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Profit Factor*</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Sharpe Ratio*</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Max DD*</th>
+                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Retorno Total*</th>
                 </tr>
               </thead>
               <tbody>
@@ -496,7 +585,7 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
                   }}>
                     <td style={{ padding: '12px' }}>
                       <div style={{ fontWeight: 'bold', color: '#333' }}>
-                        {result.configName.substring(0, 30)}...
+                        {result.configName?.substring(0, 30) || 'Sin nombre'}...
                       </div>
                       <div style={{ fontSize: '12px', color: '#666' }}>
                         {result.activo} • {result.temporalidad}
@@ -548,6 +637,10 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
             </table>
           </div>
 
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '10px', textAlign: 'center' }}>
+            * Métricas de backtesting simulado - No representan performance real de trading
+          </div>
+
           <div style={{
             marginTop: '30px',
             padding: '20px',
@@ -561,13 +654,13 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
                   {results.filter(r => parseFloat(r.sharpeRatio) > 1).length}
                 </div>
-                <div style={{ fontSize: '14px', opacity: 0.9 }}>Estrategias con Sharpe &gt; 1.0 </div>
+                <div style={{ fontSize: '14px', opacity: 0.9 }}>Estrategias con Sharpe &gt; 1.0*</div>
               </div>
               <div>
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
                   {(results.reduce((sum, r) => sum + parseFloat(r.winRate), 0) / results.length).toFixed(1)}%
                 </div>
-                <div style={{ fontSize: '14px', opacity: 0.9 }}>Win Rate Promedio</div>
+                <div style={{ fontSize: '14px', opacity: 0.9 }}>Win Rate Promedio*</div>
               </div>
               <div>
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
@@ -577,14 +670,17 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
               </div>
               <div>
                 <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-                  {results[0]?.configName.substring(0, 15) || 'N/A'}...
+                  {results[0]?.configName?.substring(0, 15) || 'N/A'}...
                 </div>
-                <div style={{ fontSize: '14px', opacity: 0.9 }}>Mejor Estrategia (por Sharpe)</div>
+                <div style={{ fontSize: '14px', opacity: 0.9 }}>Mejor Estrategia (por Sharpe)*</div>
               </div>
+            </div>
+            <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '10px', textAlign: 'center' }}>
+              * Basado en backtesting simulado con datos sintéticos
             </div>
           </div>
 
-          {/* BOTÓN PARA IMPORTAR A BOT MANAGER */}
+          {/* BOTÓN PARA IMPORTAR A BOT MANAGER (MEJORADO) */}
           <div style={{
             marginTop: '25px',
             textAlign: 'center'
@@ -612,7 +708,8 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
               color: '#666',
               fontStyle: 'italic'
             }}>
-              Los bots se marcarán como "pendientes" para revisión manual
+              Los bots se marcarán como "pendientes" para revisión manual.<br/>
+              ✅ Sistema previene duplicados automáticamente.
             </p>
           </div>
         </div>
@@ -626,13 +723,13 @@ const BacktestingEngine = ({ user, supabase, onResults }) => {
         }}>
           <div style={{ fontSize: '48px', marginBottom: '20px' }}>🧪</div>
           <h3 style={{ color: '#333', margin: '0 0 10px 0' }}>Motor de Backtesting Listo</h3>
-          <p>Ejecuta backtesting en todas tus configuraciones para obtener métricas reales calculadas con datos históricos simulados.</p>
+          <p>Ejecuta backtesting en todas tus configuraciones para obtener métricas simuladas calculadas con datos históricos.</p>
           <div style={{ fontSize: '14px', color: '#666', marginTop: '15px' }}>
-            • Win Rate calculado con operaciones reales<br/>
-            • Sharpe Ratio basado en retornos históricos<br/>
-            • Maximum Drawdown medido en períodos de pérdida<br/>
-            • Profit Factor con P&L real<br/>
-            • Comparación objetiva entre estrategias
+            • Win Rate calculado con operaciones simuladas<br/>
+            • Sharpe Ratio basado en retornos históricos sintéticos<br/>
+            • Maximum Drawdown medido en períodos de pérdida simulados<br/>
+            • Profit Factor con P&L de backtesting<br/>
+            • ⚠️ <strong>Nota:</strong> Las métricas son indicativas, no garantizan performance real
           </div>
         </div>
       )}

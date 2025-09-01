@@ -1,0 +1,62 @@
+1. 📊 Dashboard Avanzado & Analytics
+Gráficos interactivos de performance de bots
+
+Estadísticas detalladas por técnica, activo, temporalidad
+
+Comparativas visuales entre configuraciones
+
+Métricas de éxito y patrones identificados
+
+2. 🔄 Sistema de Importación/Exportación
+Exportar configuraciones a JSON, CSV, Excel
+
+Importar configuraciones desde archivos
+
+Templates predefinidos para estrategias populares
+
+Backup automático de configuraciones
+
+3. 🧪 Sistema de Backtesting Integrado
+Simulador de trading en tiempo real
+
+Métricas de rendimiento automáticas
+
+Comparación A/B entre configuraciones
+
+Reportes de backtesting detallados
+
+4. 🎯 Optimización & Performance
+Lazy loading de componentes
+
+Caching inteligente de configuraciones
+
+Búsqueda y filtros avanzados
+
+Paginación para grandes volúmenes
+
+5. 📱 Mobile-First & UX
+Diseño responsive mejorado
+
+PWA (Progressive Web App)
+
+Modo offline básico
+
+Notificaciones push
+
+6. 🤖 IA & Machine Learning
+Recomendaciones automáticas basadas en patrones exitosos
+
+Optimización automática de parámetros
+
+Detección de anomalías en configuraciones
+
+Predicciones de rendimiento
+
+7. 🔗 Integraciones Avanzadas
+APIs de brokers (MT4/MT5)
+
+Webhooks para notificaciones
+
+Sincronización con plataformas externas
+
+Sistema de alertas en tiempo real
